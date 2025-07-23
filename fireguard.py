@@ -291,8 +291,7 @@ def scan_file_behavior(path):
         return ["[✓] Žiadne podozrivé správanie nebolo zistené."]
     except Exception as e:
         return [f"[!] Chyba behaviorálneho skenu: {e}"]
-
-def check_for_updates():
+def check_for_updates_gui(self):
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
         r = requests.get(url, timeout=5)
@@ -300,7 +299,7 @@ def check_for_updates():
         data = r.json()
         latest = data.get("tag_name", "0.0.0").lstrip("v")
         if version.parse(latest) > version.parse(VERSION):
-            if messagebox.askyesno("Update", f"New version {latest} available. Download?"):
+            if messagebox.askyesno("Update", f"New version {latest} is available. Download now?"):
                 asset = next((a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")), None)
                 if asset:
                     dest = os.path.join(os.path.dirname(__file__), asset["name"])
@@ -309,9 +308,11 @@ def check_for_updates():
                             for chunk in dl.iter_content(1024 * 1024):
                                 if chunk:
                                     f.write(chunk)
-                    messagebox.showinfo("Update", f"Downloaded {asset['name']}\nPlease run installer to update.")
+                    messagebox.showinfo("Update", f"Downloaded {asset['name']}.\nPlease run it to update FireGuard.")
+        else:
+            messagebox.showinfo("Up to Date", f"You already have the latest version ({VERSION}).")
     except Exception as e:
-        print(f"Update check failed: {e}")
+        messagebox.showerror("Update Error", f"Update check failed:\n{e}")
 
 class FireGuardApp:
     def __init__(self, root):
@@ -322,7 +323,7 @@ class FireGuardApp:
         self.lang = 'en'
         self.theme = 'flatly'
         self.style.theme_use(self.theme)
-    
+        FireGuardApp.check_for_updates_gui = check_for_updates_gui
         icon_path = os.path.join(os.path.dirname(__file__), "fireguard_favicon.ico")
         if os.path.exists(icon_path):
             try:
@@ -398,6 +399,12 @@ class FireGuardApp:
         self.btn_clear_log.pack(side="right")
         self.btn_save_log = ttk.Button(self.toolbar, command=self.save_log)
         self.btn_save_log.pack(side="right")
+        self.btn_update = ttk.Button(
+        self.settings_tab,
+         text="🔄 Check for Updates",
+        command=self.check_for_updates_gui
+        )
+        self.btn_update.pack(pady=10)
 
         self.btn_open_quarantine = ttk.Button(self.toolbar, command=self.open_quarantine)
         self.btn_open_quarantine.pack(side="right")
@@ -612,7 +619,6 @@ class FireGuardApp:
         self.observer.start()
 
 if __name__ == '__main__':
-    check_for_updates()
-    root = ttkb.Window()
-    app = FireGuardApp(root)
-    root.mainloop()
+ app = FireGuardApp(ttkb.Window())
+ app.check_for_updates_gui()
+ app.root.mainloop()
