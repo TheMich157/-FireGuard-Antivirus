@@ -1,8 +1,10 @@
 import os
 import shutil
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
+import ttkbootstrap as ttkb
+from ttkbootstrap import ttk
 import re
 import hashlib
 import subprocess
@@ -121,7 +123,7 @@ def run_in_real_sandbox(path):
         temp_dir = tempfile.mkdtemp(prefix="sandbox_")
         temp_path = os.path.join(temp_dir, os.path.basename(path))
         shutil.copy2(path, temp_path)
-        p = subprocess.Popen([temp_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        p = subprocess.Popen([temp_path])
         time.sleep(10)  # sandbox timeout
         if p.poll() is None:
             p.terminate()
@@ -140,6 +142,29 @@ def detect_behavior():
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return info
+
+def scan_file_behavior(path):
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="behavior_")
+        temp_path = os.path.join(temp_dir, os.path.basename(path))
+        shutil.copy2(path, temp_path)
+        p = subprocess.Popen([temp_path])
+        time.sleep(5)
+        info = []
+        try:
+            proc = psutil.Process(p.pid)
+            for conn in proc.connections(kind='inet'):
+                if conn.status == 'ESTABLISHED' and conn.raddr:
+                    info.append(f"[BEHAVIOR] {proc.name()} -> {conn.raddr.ip}:{conn.raddr.port}")
+        except psutil.Error:
+            pass
+        p.terminate()
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        if info:
+            return info
+        return ["[✓] Žiadne podozrivé správanie nebolo zistené."]
+    except Exception as e:
+        return [f"[!] Chyba behaviorálneho skenu: {e}"]
 
 class FireGuardApp:
     def __init__(self, root):
@@ -287,8 +312,14 @@ class FireGuardApp:
         self.progress['value'] = 0
 
     def run_behavior(self):
-        self.log("[•] Spúšťam behaviorálnu analýzu...")
-        for line in detect_behavior():
+        path = filedialog.askopenfilename(filetypes=[("Executable", "*.exe"), ("All files", "*.*")])
+        if not path:
+            return
+        self.log(f"[•] Skenovanie správania súboru: {os.path.basename(path)}")
+        self.run_in_thread(self._behavior_task, path)
+
+    def _behavior_task(self, path):
+        for line in scan_file_behavior(path):
             self.log(line)
 
     def run_sandbox(self):
@@ -322,6 +353,6 @@ class FireGuardApp:
         self.observer.start()
 
 if __name__ == '__main__':
-    root = tk.Tk()
+    root = ttkb.Window(themename="flatly")
     app = FireGuardApp(root)
     root.mainloop()

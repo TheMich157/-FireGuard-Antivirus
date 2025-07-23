@@ -25,6 +25,8 @@
   - Detects active network connections of running processes.
 - 🔄 **Real-Time Directory Monitoring**
   - Detects new files and scans them on the fly.
+- 🩺 **Behavior Scan on Demand**
+  - Runs a selected executable in a sandbox and reports suspicious network activity.
 - 📢 **Desktop Notifications & Audio Alerts**
   - Alerts user with sound and popups when threats are detected.
 
@@ -35,7 +37,7 @@
 1. **Install Dependencies**
 
 ```bash
-pip install pefile watchdog psutil plyer
+pip install pefile watchdog psutil plyer ttkbootstrap
 ```
 
 2. **Run the application**
@@ -44,4 +46,4 @@ pip install pefile watchdog psutil plyer
 python fireguard.py
 ```
 
-The UI now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, and save or clear the log. Any suspicious files can be quarantined automatically.
+The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, and save or clear the log. Any suspicious files can be quarantined automatically.
