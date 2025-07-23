@@ -1,3 +1,4 @@
+
 import os
 import shutil
 import tkinter as tk
@@ -5,6 +6,12 @@ from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttkb
 from ttkbootstrap import ttk
+
+import os
+import shutil
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+from tkinter.scrolledtext import ScrolledText
 import re
 import hashlib
 import subprocess
@@ -172,6 +179,7 @@ class FireGuardApp:
         self.root.title("🦠 FireGuard Antivirus")
         self.root.geometry("800x600")
 
+
         self.notebook = ttk.Notebook(self.root)
         self.scan_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
@@ -201,12 +209,49 @@ class FireGuardApp:
         ttk.Button(self.toolbar, text="🧪 Sandbox test", command=self.run_sandbox).pack(side="left")
         ttk.Button(self.toolbar, text="🟢 Real-Time sledovanie", command=self.toggle_monitoring).pack(side="left")
         ttk.Button(self.toolbar, text="🧹 Vyčistiť log", command=self.clear_log).pack(side="right")
-        ttk.Button(self.toolbar, text="💾 Uložiť log", command=self.save_log).pack(side="right")
+        ttk.Button(self.toolbar, text="💾 Uložiť log", command=self.save_log).pack(side="right"
+        self.frame = ttk.Frame(self.root)
+        self.frame.pack(fill="both", expand=True)
+
+        self.text = ScrolledText(self.frame, wrap="word", bg="black", fg="lime", insertbackground="lime")
+        self.text.pack(fill="both", expand=True)
+
+        self.progress = ttk.Progressbar(self.root, mode="determinate")
+        self.progress.pack(fill="x")
+
 
         self.monitoring = False
         self.observer = None
         self.stop_event = threading.Event()
         patterns.update(load_patterns_from_file())
+
+    def run_in_thread(self, func, *args):
+        threading.Thread(target=func, args=args, daemon=True).start()
+
+    def log(self, msg):
+        self.text.insert("end", msg + "\n")
+        self.text.see("end")
+        print(msg)
+
+
+    def open_zip(self):
+        zip_path = filedialog.askopenfilename(filetypes=[("ZIP súbory", "*.zip")])
+        if not zip_path:
+            return
+        extract_to = os.path.join(os.getcwd(), "temp_extract")
+        os.makedirs(extract_to, exist_ok=True)
+
+
+        ttk.Button(self.toolbar, text="📂 Otvoriť ZIP", command=self.open_zip).pack(side="left")
+        ttk.Button(self.toolbar, text="📄 Skenovať súbor", command=self.scan_file).pack(side="left")
+        ttk.Button(self.toolbar, text="🔍 Skenovať správanie", command=self.run_behavior).pack(side="left")
+        ttk.Button(self.toolbar, text="🧪 Sandbox test", command=self.run_sandbox).pack(side="left")
+        ttk.Button(self.toolbar, text="🟢 Real-Time sledovanie", command=self.toggle_monitoring).pack(side="left")
+        ttk.Button(self.toolbar, text="🧹 Vyčistiť log", command=self.clear_log).pack(side="right")
+        ttk.Button(self.toolbar, text="💾 Uložiť log", command=self.save_log).pack(side="right")
+
+        self.monitoring = False
+        self.observer = None
 
     def run_in_thread(self, func, *args):
         threading.Thread(target=func, args=args, daemon=True).start()
@@ -223,6 +268,7 @@ class FireGuardApp:
         extract_to = os.path.join(os.getcwd(), "temp_extract")
         os.makedirs(extract_to, exist_ok=True)
 
+
         success, output = extract_zip_7z(zip_path, extract_to)
         if success:
             self.log("[✓] Archív extrahovaný pomocou 7-Zip.")
@@ -233,6 +279,7 @@ class FireGuardApp:
     def scan_file(self):
         path = filedialog.askopenfilename(filetypes=[("Súbory", "*.*")])
         if path:
+
             self.run_in_thread(self.scan_directory, path)
 
     def scan_directory_prompt(self):
@@ -258,6 +305,9 @@ class FireGuardApp:
         except Exception as e:
             messagebox.showerror("Vzory", f"Chyba: {e}")
 
+            self.run_in_thread(self.scan_directory, os.path.dirname(path))
+
+
     def clear_log(self):
         self.text.delete("1.0", tk.END)
 
@@ -268,7 +318,10 @@ class FireGuardApp:
                 f.write(self.text.get("1.0", tk.END))
 
     def scan_directory(self, folder):
+
         self.stop_event.clear()
+
+
         files_to_scan = []
         if os.path.isfile(folder):
             files_to_scan.append(folder)
@@ -281,6 +334,7 @@ class FireGuardApp:
         for idx, path in enumerate(files_to_scan, 1):
             if self.stop_event.is_set():
                 break
+
             file = os.path.basename(path)
             self.progress['maximum'] = total
             self.progress['value'] = idx
@@ -295,6 +349,7 @@ class FireGuardApp:
                         self.log(f"⚠️  Detegované podozrivé: {file} (Skóre: {score}) | MD5: {md5}")
                         notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
                         winsound.Beep(1000, 400)
+
                         if messagebox.askyesno("Quarantine", f"Presunúť {file} do karantény?"):
                             qdir = os.path.join(os.getcwd(), "quarantine")
                             os.makedirs(qdir, exist_ok=True)
@@ -321,6 +376,11 @@ class FireGuardApp:
     def _behavior_task(self, path):
         for line in scan_file_behavior(path):
             self.log(line)
+    def run_behavior(self):
+        self.log("[•] Spúšťam behaviorálnu analýzu...")
+        for line in detect_behavior():
+            self.log(line)
+
 
     def run_sandbox(self):
         path = filedialog.askopenfilename(filetypes=[("Executable", "*.exe")])
