@@ -30,3 +30,12 @@
 
 ```bash
 pip install pefile watchdog psutil plyer
+```
+
+2. **Run the application**
+
+```bash
+python fireguard.py
+```
+
+The interface now includes quick actions for scanning individual files, clearing logs and saving reports. Progress of scans is displayed via a progress bar so you know how far along a scan is.

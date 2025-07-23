@@ -2,6 +2,7 @@ import os
 import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from tkinter.scrolledtext import ScrolledText
 import re
 import hashlib
 import subprocess
@@ -129,19 +130,28 @@ class FireGuardApp:
         self.frame = ttk.Frame(self.root)
         self.frame.pack(fill="both", expand=True)
 
-        self.text = tk.Text(self.frame, wrap="word", bg="black", fg="lime", insertbackground="lime")
+        self.text = ScrolledText(self.frame, wrap="word", bg="black", fg="lime", insertbackground="lime")
         self.text.pack(fill="both", expand=True)
+
+        self.progress = ttk.Progressbar(self.root, mode="determinate")
+        self.progress.pack(fill="x")
 
         self.toolbar = ttk.Frame(self.root)
         self.toolbar.pack(fill="x")
 
         ttk.Button(self.toolbar, text="📂 Otvoriť ZIP", command=self.open_zip).pack(side="left")
+        ttk.Button(self.toolbar, text="📄 Skenovať súbor", command=self.scan_file).pack(side="left")
         ttk.Button(self.toolbar, text="🔍 Skenovať správanie", command=self.run_behavior).pack(side="left")
         ttk.Button(self.toolbar, text="🧪 Sandbox test", command=self.run_sandbox).pack(side="left")
         ttk.Button(self.toolbar, text="🟢 Real-Time sledovanie", command=self.toggle_monitoring).pack(side="left")
+        ttk.Button(self.toolbar, text="🧹 Vyčistiť log", command=self.clear_log).pack(side="right")
+        ttk.Button(self.toolbar, text="💾 Uložiť log", command=self.save_log).pack(side="right")
 
         self.monitoring = False
         self.observer = None
+
+    def run_in_thread(self, func, *args):
+        threading.Thread(target=func, args=args, daemon=True).start()
 
     def log(self, msg):
         self.text.insert("end", msg + "\n")
@@ -158,33 +168,59 @@ class FireGuardApp:
         success, output = extract_zip_7z(zip_path, extract_to)
         if success:
             self.log("[✓] Archív extrahovaný pomocou 7-Zip.")
-            self.scan_directory(extract_to)
+            self.run_in_thread(self.scan_directory, extract_to)
         else:
             self.log(f"[ERROR] Extrakcia zlyhala: {output}")
 
+    def scan_file(self):
+        path = filedialog.askopenfilename(filetypes=[("Súbory", "*.*")])
+        if path:
+            self.run_in_thread(self.scan_directory, os.path.dirname(path))
+
+    def clear_log(self):
+        self.text.delete("1.0", tk.END)
+
+    def save_log(self):
+        log_path = filedialog.asksaveasfilename(defaultextension=".txt")
+        if log_path:
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(self.text.get("1.0", tk.END))
+
     def scan_directory(self, folder):
-        for root, _, files in os.walk(folder):
-            for file in files:
-                path = os.path.join(root, file)
-                if file.endswith(valid_ext):
-                    self.log(f"[•] Skenujem: {file}")
-                    with open(path, "rb") as f:
-                        content = f.read().decode("utf-8", errors="ignore")
-                        score = calculate_threat_level(content)
-                        md5 = hashlib.md5(content.encode("utf-8", errors="ignore")).hexdigest()
-                        if score >= 3:
-                            self.log(f"⚠️  Detegované podozrivé: {file} (Skóre: {score}) | MD5: {md5}")
-                            notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
-                            winsound.Beep(1000, 400)
-                    if file.endswith(".exe"):
-                        for line in analyze_exe_core(path):
-                            self.log(line)
-                        for line in deep_file_decompile(path):
-                            if any(p in line.lower() for p in ['key', 'token', 'hack', 'inject']):
-                                self.log(f"[DECOMP] {line.strip()}")
-                    if file.endswith(".dll"):
-                        for line in analyze_exe_core(path):
-                            self.log(line)
+        files_to_scan = []
+        if os.path.isfile(folder):
+            files_to_scan.append(folder)
+        else:
+            for root, _, files in os.walk(folder):
+                for file in files:
+                    files_to_scan.append(os.path.join(root, file))
+
+        total = len(files_to_scan)
+        for idx, path in enumerate(files_to_scan, 1):
+            file = os.path.basename(path)
+            self.progress['maximum'] = total
+            self.progress['value'] = idx
+            if file.endswith(valid_ext):
+                self.log(f"[•] Skenujem: {file}")
+                with open(path, "rb") as f:
+                    data = f.read()
+                    content = data.decode("utf-8", errors="ignore")
+                    score = calculate_threat_level(content)
+                    md5 = hashlib.md5(data).hexdigest()
+                    if score >= 3:
+                        self.log(f"⚠️  Detegované podozrivé: {file} (Skóre: {score}) | MD5: {md5}")
+                        notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
+                        winsound.Beep(1000, 400)
+                if file.endswith(".exe"):
+                    for line in analyze_exe_core(path):
+                        self.log(line)
+                    for line in deep_file_decompile(path):
+                        if any(p in line.lower() for p in ['key', 'token', 'hack', 'inject']):
+                            self.log(f"[DECOMP] {line.strip()}")
+                if file.endswith(".dll"):
+                    for line in analyze_exe_core(path):
+                        self.log(line)
+        self.progress['value'] = 0
 
     def run_behavior(self):
         self.log("[•] Spúšťam behaviorálnu analýzu...")
@@ -215,7 +251,7 @@ class FireGuardApp:
                 if event.is_directory:
                     return
                 self.log(f"[!] Zistený nový súbor: {event.src_path}")
-                self.scan_directory(os.path.dirname(event.src_path))
+                self.run_in_thread(self.scan_directory, event.src_path)
 
         self.observer = Observer()
         self.observer.schedule(Handler(), folder, recursive=True)
