@@ -28,7 +28,15 @@
 - 🩺 **Behavior Scan on Demand**
   - Runs a selected executable in a sandbox and reports suspicious network activity.
 - 📢 **Desktop Notifications & Audio Alerts**
-  - Alerts user with sound and popups when threats are detected.
+  - Alerts user with popups and an optional beep when threats are detected.
+- 📝 **Import Log**
+  - On startup the log shows all Python modules successfully loaded.
+- 🎨 **Light & Dark Themes**
+  - Switch between modern light or dark appearances.
+- 🌐 **Multi-language UI**
+  - Interface available in English, Slovak, Czech and German.
+- 📂 **Open Quarantine Folder**
+  - Quickly review quarantined files from the toolbar.
 
 ---
 
@@ -37,11 +45,7 @@
 1. **Install Dependencies**
 
 ```bash
-
 pip install pefile watchdog psutil plyer ttkbootstrap
-=======
-pip install pefile watchdog psutil plyer
-
 ```
 
 2. **Run the application**
@@ -50,7 +54,4 @@ pip install pefile watchdog psutil plyer
 python fireguard.py
 ```
 
-The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, and save or clear the log. Any suspicious files can be quarantined automatically.
-=======
-The interface now includes quick actions for scanning individual files, clearing logs and saving reports. Progress of scans is displayed via a progress bar so you know how far along a scan is.
-
+The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, open the quarantine folder, and save or clear the log. Choose your preferred theme and language in the settings tab.
