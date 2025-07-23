@@ -4,6 +4,7 @@
 
 ---
 
+
 ## 📦 Features
 
 - 🔍 **Pattern-Based Threat Detection**
@@ -37,6 +38,32 @@
   - Interface available in English, Slovak, Czech and German.
 - 📂 **Open Quarantine Folder**
   - Quickly review quarantined files from the toolbar.
+  - 🔀 **Threaded Scanning**
+  - Uses multiple worker threads for faster scans.
+- ⚙️ **Adjustable Detection Threshold**
+  - Choose how sensitive the scanner is to suspicious patterns.
+- 📊 **Threat Level Classification**
+  - Results show Low/Medium/High severity ratings.
+- 📜 **Automatic Log File**
+  - All events are stored in `fireguard.log`.
+- 🪪 **MD5 Hash Display**
+  - Every scan shows the MD5 of each file.
+- 🧹 **Quarantine Management**
+  - Automatically move threats to the quarantine folder.
+- 📝 **Save & Clear Log**
+  - Manage the log directly from the toolbar.
+- 📡 **Network Behavior Viewer**
+  - View active network connections during behavior scans.
+- 🎚 **Adjustable Thread Count**
+  - Set how many threads to use for scanning.
+- 🕒 **Progress Bar Indicator**
+  - Visual progress updates during long scans.
+- 🧩 **Settings Tab**
+  - Edit patterns and options in one place.
+- 🌁 **Modern ttkbootstrap UI**
+  - Clean look & feel with dark and light themes.
+- 🖱 **Drag & Drop Files**
+  - Drop files onto the window to start an immediate scan.
 
 ---
 
@@ -54,4 +81,16 @@ pip install pefile watchdog psutil plyer ttkbootstrap
 python fireguard.py
 ```
 
-The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, open the quarantine folder, and save or clear the log. Choose your preferred theme and language in the settings tab.
+The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, open the quarantine folder, and save or clear the log. Choose your theme, language, thread count, and detection threshold in the settings tab.
+If a `fireguard.ico` is present, it becomes the window icon.
+
+### Build a Windows EXE
+
+Install [PyInstaller](https://pyinstaller.org/) and generate a single-file executable:
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --noconsole fireguard.py
+```
+
+The compiled `fireguard.exe` automatically checks GitHub releases on startup and prompts to download a newer version if available.
