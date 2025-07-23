@@ -1,0 +1,7 @@
+pefile
+watchdog
+psutil
+plyer
+ttkbootstrap
+requests
+packaging
