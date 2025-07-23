@@ -13,6 +13,7 @@ import time
 import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from concurrent.futures import ThreadPoolExecutor
 try:
     import winsound
 
@@ -31,6 +32,13 @@ import psutil
 import socket
 import tempfile
 import json
+import requests
+from packaging import version
+
+VERSION = "0.1.0"
+GITHUB_REPO = "TheMich157/-FireGuard-Antivirus"
+LOG_PATH = "fireguard.log"
+THREAT_THRESHOLD = 3
 
 # Possible risks when using this program:
 # - Running unknown files may damage your system.
@@ -42,7 +50,8 @@ import json
 IMPORTED_MODULES = [
     'os', 'shutil', 'tkinter', 'ttkbootstrap', 're', 'hashlib', 'subprocess',
     'pefile', 'time', 'threading', 'watchdog', 'winsound/beep', 'plyer',
-    'ctypes', 'psutil', 'socket', 'tempfile', 'json'
+    'ctypes', 'psutil', 'socket', 'tempfile', 'json', 'requests',
+    'packaging.version'
 ]
 
 # Supported interface languages
@@ -62,7 +71,9 @@ LANGUAGES = {
         'scan_tab': 'Scanning',
         'settings_tab': 'Settings',
         'language': 'Language',
-        'theme': 'Theme'
+         'theme': 'Theme',
+        'threads': 'Threads',
+        'threshold': 'Threshold'
     },
     'sk': {
         'open_zip': 'Otvoriť ZIP',
@@ -79,7 +90,9 @@ LANGUAGES = {
         'scan_tab': 'Skenovanie',
         'settings_tab': 'Nastavenia',
         'language': 'Jazyk',
-        'theme': 'Téma'
+        'theme': 'Téma',
+        'threads': 'Vlákna',
+        'threshold': 'Prah'
     },
     'cs': {
         'open_zip': 'Otevřít ZIP',
@@ -96,7 +109,9 @@ LANGUAGES = {
         'scan_tab': 'Skenování',
         'settings_tab': 'Nastavení',
         'language': 'Jazyk',
-        'theme': 'Téma'
+        'theme': 'Téma',
+        'threads': 'Vlákna',
+        'threshold': 'Prahová hodnota'
     },
     'de': {
         'open_zip': 'ZIP öffnen',
@@ -113,7 +128,9 @@ LANGUAGES = {
         'scan_tab': 'Scan',
         'settings_tab': 'Einstellungen',
         'language': 'Sprache',
-        'theme': 'Thema'
+        'theme': 'Thema',
+        'threads': 'Threads',
+        'threshold': 'Schwelle'
     }
 }
 
@@ -220,6 +237,13 @@ def calculate_threat_level(content):
             score += pts
     return score
 
+def classify_score(score):
+    if score >= 6:
+        return "High"
+    if score >= THREAT_THRESHOLD:
+        return "Medium"
+    return "Low"
+
 def run_in_real_sandbox(path):
     try:
         temp_dir = tempfile.mkdtemp(prefix="sandbox_")
@@ -268,6 +292,27 @@ def scan_file_behavior(path):
     except Exception as e:
         return [f"[!] Chyba behaviorálneho skenu: {e}"]
 
+def check_for_updates():
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        latest = data.get("tag_name", "0.0.0").lstrip("v")
+        if version.parse(latest) > version.parse(VERSION):
+            if messagebox.askyesno("Update", f"New version {latest} available. Download?"):
+                asset = next((a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")), None)
+                if asset:
+                    dest = os.path.join(os.path.dirname(__file__), asset["name"])
+                    with requests.get(asset["browser_download_url"], stream=True, timeout=10) as dl:
+                        with open(dest, "wb") as f:
+                            for chunk in dl.iter_content(1024 * 1024):
+                                if chunk:
+                                    f.write(chunk)
+                    messagebox.showinfo("Update", f"Downloaded {asset['name']}\nPlease run installer to update.")
+    except Exception as e:
+        print(f"Update check failed: {e}")
+
 class FireGuardApp:
     def __init__(self, root):
         self.root = root
@@ -277,6 +322,18 @@ class FireGuardApp:
         self.lang = 'en'
         self.theme = 'flatly'
         self.style.theme_use(self.theme)
+    
+        icon_path = os.path.join(os.path.dirname(__file__), "fireguard_favicon.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.root.iconbitmap(icon_path)
+            except Exception:
+                try:
+                    icon = tk.PhotoImage(file=icon_path)
+                    self.root.iconphoto(True, icon)
+                except Exception:
+                    pass
+
 
         self.notebook = ttk.Notebook(self.root)
         self.scan_tab = ttk.Frame(self.notebook)
@@ -314,6 +371,14 @@ class FireGuardApp:
         self.lbl_theme.pack(side="left", padx=20)
         self.theme_var = tk.StringVar(value='light')
         ttk.OptionMenu(controls, self.theme_var, 'light', 'light', 'dark', command=self.change_theme).pack(side="left")
+        self.lbl_threads = ttk.Label(controls, text=LANGUAGES[self.lang]['threads'])
+        self.lbl_threads.pack(side="left", padx=20)
+        self.thread_var = tk.IntVar(value=max(1, os.cpu_count() or 4))
+        ttk.Spinbox(controls, from_=1, to=16, textvariable=self.thread_var, width=3).pack(side="left")
+        self.lbl_threshold = ttk.Label(controls, text=LANGUAGES[self.lang]['threshold'])
+        self.lbl_threshold.pack(side="left", padx=20)
+        self.threshold_var = tk.IntVar(value=THREAT_THRESHOLD)
+        ttk.Spinbox(controls, from_=1, to=10, textvariable=self.threshold_var, width=3).pack(side="left")
 
         self.btn_open_zip = ttk.Button(self.toolbar, command=self.open_zip)
         self.btn_open_zip.pack(side="left")
@@ -352,6 +417,11 @@ class FireGuardApp:
         self.text.insert("end", msg + "\n")
         self.text.see("end")
         print(msg)
+        try:
+            with open(LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
 
     def log_imports(self):
         self.log("[✓] Načítané moduly:")
@@ -373,6 +443,8 @@ class FireGuardApp:
         self.save_patterns_btn.config(text=t['save_patterns'])
         self.lbl_language.config(text=t['language'])
         self.lbl_theme.config(text=t['theme'])
+        self.lbl_threads.config(text=t['threads'])
+        self.lbl_threshold.config(text=t['threshold'])
         self.btn_open_zip.config(text='📂 ' + t['open_zip'])
         self.btn_scan_file.config(text='📄 ' + t['scan_file'])
         self.btn_scan_dir.config(text='📁 ' + t['scan_dir'])
@@ -446,6 +518,35 @@ class FireGuardApp:
         except Exception:
             messagebox.showinfo('Quarantine', qdir)
 
+    def scan_single(self, path):
+        file = os.path.basename(path)
+        if not file.endswith(valid_ext):
+            return
+        self.log(f"[•] Skenujem: {file}")
+        with open(path, "rb") as f:
+            data = f.read()
+        content = data.decode("utf-8", errors="ignore")
+        score = calculate_threat_level(content)
+        md5 = hashlib.md5(data).hexdigest()
+        if score >= self.threshold_var.get():
+            level = classify_score(score)
+            self.log(f"⚠️  Detegované podozrivé: {file} (Level: {level}, Score: {score}) | MD5: {md5}")
+            if notification:
+                notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
+            beep()
+            if messagebox.askyesno("Quarantine", f"Presunúť {file} do karantény?"):
+                qdir = os.path.join(os.getcwd(), "quarantine")
+                os.makedirs(qdir, exist_ok=True)
+                shutil.move(path, os.path.join(qdir, file))
+                return
+        if file.endswith(".exe") or file.endswith(".dll"):
+            for line in analyze_exe_core(path):
+                self.log(line)
+        if file.endswith(".exe"):
+            for line in deep_file_decompile(path):
+                if any(p in line.lower() for p in ['key', 'token', 'hack', 'inject']):
+                    self.log(f"[DECOMP] {line.strip()}")
+
     def scan_directory(self, folder):
         self.stop_event.clear()
         files_to_scan = []
@@ -457,38 +558,16 @@ class FireGuardApp:
                     files_to_scan.append(os.path.join(root, file))
 
         total = len(files_to_scan)
-        for idx, path in enumerate(files_to_scan, 1):
-            if self.stop_event.is_set():
-                break
-            file = os.path.basename(path)
-            self.progress['maximum'] = total
-            self.progress['value'] = idx
-            if file.endswith(valid_ext):
-                self.log(f"[•] Skenujem: {file}")
-                with open(path, "rb") as f:
-                    data = f.read()
-                    content = data.decode("utf-8", errors="ignore")
-                    score = calculate_threat_level(content)
-                    md5 = hashlib.md5(data).hexdigest()
-                    if score >= 3:
-                        self.log(f"⚠️  Detegované podozrivé: {file} (Skóre: {score}) | MD5: {md5}")
-                        if notification:
-                            notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
-                        beep()
-                        if messagebox.askyesno("Quarantine", f"Presunúť {file} do karantény?"):
-                            qdir = os.path.join(os.getcwd(), "quarantine")
-                            os.makedirs(qdir, exist_ok=True)
-                            shutil.move(path, os.path.join(qdir, file))
-                            continue
-                if file.endswith(".exe"):
-                    for line in analyze_exe_core(path):
-                        self.log(line)
-                    for line in deep_file_decompile(path):
-                        if any(p in line.lower() for p in ['key', 'token', 'hack', 'inject']):
-                            self.log(f"[DECOMP] {line.strip()}")
-                if file.endswith(".dll"):
-                    for line in analyze_exe_core(path):
-                        self.log(line)
+        self.progress['maximum'] = total
+        with ThreadPoolExecutor(max_workers=self.thread_var.get()) as ex:
+            futures = []
+            for path in files_to_scan:
+                if self.stop_event.is_set():
+                    break
+                futures.append(ex.submit(self.scan_single, path))
+            for idx, fut in enumerate(futures, 1):
+                fut.result()
+                self.progress['value'] = idx
         self.progress['value'] = 0
 
     def run_behavior(self):
@@ -533,6 +612,7 @@ class FireGuardApp:
         self.observer.start()
 
 if __name__ == '__main__':
+    check_for_updates()
     root = ttkb.Window()
     app = FireGuardApp(root)
     root.mainloop()
