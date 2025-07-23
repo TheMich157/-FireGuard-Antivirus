@@ -13,6 +13,12 @@
   - Decompiles binaries using `strings` for deep inspection.
 - 📂 **ZIP File Extraction & Scan**
   - Uses `7-Zip` to extract and analyze ZIP files for threats.
+- 📁 **Directory & File Scanning**
+  - Scan entire folders or individual files with progress feedback.
+- 🛑 **Stop Scans Anytime**
+  - Abort long scans with the stop button.
+- 📄 **Editable Detection Patterns**
+  - Customize regex rules via `patterns.json` in the settings tab.
 - 🔬 **Sandbox Execution**
   - Launch `.exe` files in a real temporary sandbox for safe observation.
 - 🛜 **Behavioral Analysis**
@@ -30,3 +36,12 @@
 
 ```bash
 pip install pefile watchdog psutil plyer
+```
+
+2. **Run the application**
+
+```bash
+python fireguard.py
+```
+
+The UI now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, and save or clear the log. Any suspicious files can be quarantined automatically.
