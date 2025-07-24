@@ -5,3 +5,7 @@ plyer
 ttkbootstrap
 requests
 packaging
+flask
+pymongo
+pyjwt
+werkzeug
