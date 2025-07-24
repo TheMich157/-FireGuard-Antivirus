@@ -69,8 +69,12 @@ class EXDApp:
             self.clients_tree.heading(col, text=col.title())
         self.clients_tree.pack(fill=tk.X, padx=10, pady=10)
 
-        self.log_text = tk.Text(self.root, state=tk.DISABLED, height=10)
+        self.log_text = tk.Text(self.root, height=10)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.log_text.bind("<Key>", lambda e: "break")
+
+        copy_btn = ttk.Button(top, text="Copy Logs", command=self.copy_logs)
+        copy_btn.pack(side=tk.RIGHT)
 
         self.load_clients()
         self.poll_logs()
@@ -100,10 +104,12 @@ class EXDApp:
             self.display_logs(f"Request error: {e}")
 
     def display_logs(self, text):
-        self.log_text.configure(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, text)
-        self.log_text.configure(state=tk.DISABLED)
+
+    def copy_logs(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.log_text.get("1.0", tk.END))
     def poll_logs(self):
         self.fetch_logs()
         self.log_job = self.root.after(5000, self.poll_logs)
