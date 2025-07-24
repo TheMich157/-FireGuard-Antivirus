@@ -360,7 +360,8 @@ def check_status():
     if resp is not None and resp.status_code == 200:
         data = resp.json()
         if data.get("banned"):
-            kill_switch("User banned")
+            reason = data.get("reason") or "User banned"
+            kill_switch(reason)
 
 def kill_switch(reason: str):
     api_post("/api/report_violation", {"hwid": HWID, "reason": reason})
@@ -426,8 +427,9 @@ class FireGuardApp:
         self.style.theme_use(self.theme)
         check_status()
         verify_integrity()
-
+        self.poll_status()
         icon_path = os.path.join(os.path.dirname(__file__), "fireguard_favicon.ico")
+
         if os.path.exists(icon_path):
             try:
                 self.root.iconbitmap(icon_path)
@@ -603,6 +605,12 @@ class FireGuardApp:
         except Exception as e:
             messagebox.showerror("Update Error", f"Update check failed:\n{e}")
 
+    def poll_status(self):
+        try:
+            check_status()
+        finally:
+            self.root.after(60000, self.poll_status)
+
     def run_in_thread(self, func, *args):
         def wrapper():
             try:
@@ -610,6 +618,8 @@ class FireGuardApp:
             except Exception as e:
                 send_error_log(str(e))
         threading.Thread(target=wrapper, daemon=True).start()
+
+
 
     def log(self, msg):
         self.text.insert("end", msg + "\n")
