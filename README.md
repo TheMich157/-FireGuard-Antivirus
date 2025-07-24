@@ -55,7 +55,7 @@ API_URL=https://myserver.com python fireguard.py
    - `SECRET_KEY` – Flask secret for JWTs
    - `ADMIN_PASS` – initial admin password
    - `LATEST_VERSION` – current client version tag
-   - `LATEST_BINARY` – path to the latest `.exe` to serve via `/release`
+  - `LATEST_BINARY` – path to the latest `.exe` served via `/release` (auth required)
 3. Start locally with:
    ```bash
    python server.py
@@ -76,10 +76,18 @@ Run `python exd.py` to launch the admin toolkit. After logging in you can:
 - Toggle bans or remove users
 - Browse logs in real time
 
+EXD is distributed under the same MIT License as the rest of FireGuard. You may
+share the compiled `exd.exe` freely as long as the license file is included. This free management tool lets you oversee client registrations and push new versions.
+
 ---
 
 ## Admin Dashboard
 The backend exposes `/admin` – a simple page listing API routes with a green/red status indicator and the total user count. Use your EXD credentials to log in.
+
+### Built-in API docs
+Browse `/docs` on the server to view styled pages for each API endpoint. Subpages describe the method and purpose of the route and link directly to the live API.
+
+The landing page at `/` now contains a small HTML/JavaScript interface for registering or logging in using the API. Successful requests show the returned token on screen. The page and the built‑in docs use a cleaner theme for easier navigation.
 
 ---
 
@@ -96,8 +104,8 @@ The backend exposes `/admin` – a simple page listing API routes with a green/r
 | `POST /api/refresh_token` | renew JWT |
 | `GET /api/check_update` | get latest client version |
 | `POST /api/set_version` | set latest version (admin) |
-| `GET /api/download_update` | download newest binary |
-| `GET /release` | direct binary download |
+| `GET /api/download_update` | download newest binary *(auth required)* |
+| `GET /release` | direct binary download *(auth required)* |
 | `GET /api/version_history` | list previous versions |
 | `GET /api/clients` | list all users (admin) |
 | `POST /api/remove_user` | delete an account |
@@ -124,3 +132,6 @@ Every endpoint requires a `Bearer` token header except `/admin` and the registra
 ---
 
 FireGuard is a work in progress and should not be trusted as a full security solution. Use it for educational purposes only.
+
+## License
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.

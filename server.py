@@ -21,6 +21,83 @@ import threading
 import time
 import requests
 
+# Simple CSS style used by rendered pages
+STYLE = """
+<style>
+body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(#fff, #e3ebf3);
+    color: #222;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+}
+h1 {color:#dc3545;}
+h2 {color:#0275d8;}
+a {color:#0275d8; text-decoration:none;}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background:#fff;
+    border-radius:4px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+th {background:#f7f7f7; text-align:left;}
+tr:nth-child(odd) {background:#fbfbfb;}
+th, td {padding:8px 12px; border-bottom:1px solid #ddd;}
+button {
+    background:#dc3545; color:#fff; border:none;
+    padding:8px 14px; border-radius:4px; cursor:pointer;
+}
+button:hover {background:#c9302c;}
+input {
+    padding:6px 8px; margin-bottom:10px; width:100%;
+    border:1px solid #ccc; border-radius:4px;
+}
+.container {max-width:800px;margin:auto;}
+.card {
+    padding:15px; background:#fff; border-radius:4px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom:20px;
+}
+</style>
+"""
+
+# Basic info for the API documentation pages
+API_DOCS = {
+    '/api/register': ('POST', 'create a new account'),
+    '/api/login': ('POST', 'authenticate user'),
+    '/api/me': ('GET', 'return current account info'),
+    '/api/change_password': ('POST', "change logged in user's password"),
+    '/api/logout': ('POST', 'invalidate token'),
+    '/api/reset_password_request': ('POST', 'start a password reset'),
+    '/api/reset_password': ('POST', 'complete password reset'),
+    '/api/refresh_token': ('POST', 'renew JWT'),
+    '/api/check_update': ('GET', 'get latest client version'),
+    '/api/set_version': ('POST', 'set latest version (admin)'),
+    '/api/download_update': ('GET', 'download newest binary (auth)'),
+    '/release': ('GET', 'direct binary download (auth)'),
+    '/api/version_history': ('GET', 'list previous versions'),
+    '/api/clients': ('GET', 'list all users (admin)'),
+    '/api/remove_user': ('POST', 'delete an account'),
+    '/api/ban': ('POST', 'ban a user or HWID'),
+    '/api/unban': ('POST', 'remove a ban'),
+    '/api/set_banned': ('POST', 'toggle ban status'),
+    '/api/unlink_hwid': ('POST', "reset user's HWID"),
+    '/api/security/kill_switch': ('POST', 'force shutdown on a client'),
+    '/api/security/flag_hwid': ('POST', 'mark HWID as suspicious'),
+    '/api/activity_log': ('GET', 'admin activity history'),
+    '/api/logs': ('GET', 'fetch logs'),
+    '/api/logs/errors': ('GET', 'fetch only error logs'),
+    '/api/stats': ('GET', 'system statistics'),
+    '/api/violations': ('GET', 'list reported violations'),
+    '/api/inbox/send': ('POST', 'send message to user'),
+    '/api/inbox': ('GET', 'list inbox messages'),
+    '/api/inbox/read/<id>': ('POST', 'mark message as read'),
+    '/api/analyze_file': ('POST', 'upload file for scoring'),
+    '/api/get_threat_score/<md5>': ('GET', 'query score by hash'),
+    '/api/submit_feedback': ('POST', 'submit false-positive feedback'),
+}
+
 
 # Flask app setup
 app = Flask(__name__)
@@ -172,11 +249,11 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         error = 'Invalid credentials'
     return render_template_string(
-        '''<form method="post">
+        STYLE + '''<form method="post" class="container" style="max-width:300px;">
             <h2>Admin Login</h2>
             <p style="color:red;">{{error}}</p>
-            <input name="username" placeholder="Username">
-            <input name="password" type="password" placeholder="Password">
+            <input name="username" placeholder="Username" style="width:100%;margin-bottom:10px;">
+            <input name="password" type="password" placeholder="Password" style="width:100%;margin-bottom:10px;">
             <button type="submit">Login</button>
         </form>''',
         error=error,
@@ -188,17 +265,88 @@ def admin_logout():
     session.pop('admin', None)
     return redirect(url_for('admin_login'))
 
+LANDING_PAGE = """
+<!doctype html>
+<html>
+<head>
+    <title>FireGuard Antivirus</title>
+</head>
+<body class="container">
+    <h1>FireGuard Antivirus</h1>
+    <p id="status"></p>
+    <div class="card">
+        <h2>Register</h2>
+        <input id="reg_user" placeholder="Username">
+        <input id="reg_pass" type="password" placeholder="Password">
+        <button onclick="register()">Register</button>
+    </div>
+    <div class="card">
+        <h2>Login</h2>
+        <input id="log_user" placeholder="Username">
+        <input id="log_pass" type="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+    <p>API reference: <a href='/docs'>/docs</a> | <a href='/admin'>Admin</a></p>
+<script>
+async function register(){
+    const res = await fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('reg_user').value, password:document.getElementById('reg_pass').value})});
+    const data = await res.json();
+    document.getElementById('status').innerText = data.token ? 'Registered! Token: '+data.token : (data.error||'Error');
+}
+async function login(){
+    const res = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('log_user').value, password:document.getElementById('log_pass').value})});
+    const data = await res.json();
+    document.getElementById('status').innerText = data.token ? 'Logged in! Token: '+data.token : (data.error||'Error');
+}
+</script>
+</body>
+</html>
+"""
+
+
 @app.route('/')
 def home_page():
-    """Simple landing page for the API service."""
-    return render_template_string(
-        """
-        <h1>FireGuard Antivirus</h1>
-        <p>Welcome to the FireGuard API server.</p>
-        <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
-        <p>Project homepage: <a href='https://fireguard-antivirus.onrender.com/'>https://fireguard-antivirus.onrender.com</a></p>
-        """
+    """Interactive landing page with register/login forms."""
+    return render_template_string(STYLE + LANDING_PAGE)
+
+
+@app.route('/docs')
+def docs_index():
+    """List available API endpoints."""
+    rows = []
+    for path, (method, desc) in sorted(API_DOCS.items()):
+        rows.append(
+            f"<tr><td><a href='/docs{path}'>{path}</a></td><td>{method}</td><td>{desc}</td></tr>"
+        )
+    table = "<table><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>" + "".join(rows) + "</table>"
+    html = f"<div class='container'><h2>API Documentation</h2>{table}</div>"
+    return render_template_string(STYLE + html)
+
+
+@app.route('/docs/api/<path:path>')
+def docs_api_redirect(path):
+    """Direct redirect to the raw API endpoint."""
+    return redirect(f'/api/{path}')
+
+
+@app.route('/docs/<path:path>')
+def docs_page(path):
+    """Render a simple documentation page for the given endpoint."""
+    endpoint = '/' + path if not path.startswith('/') else path
+    info = API_DOCS.get(endpoint)
+    if not info:
+        return redirect(f'/api/{path}')
+    method, desc = info
+    html = (
+        f"<div class='container'>"
+        f"<h2>{endpoint}</h2>"
+        f"<p><strong>Method:</strong> {method}</p>"
+        f"<p>{desc}</p>"
+        f"<p><a href='{endpoint}'>Go to endpoint</a></p>"
+        f"<p><a href='/docs'>&larr; Back to index</a></p>"
+        f"</div>"
     )
+    return render_template_string(STYLE + html)
 
 @app.route('/admin/api/<path:path>')
 @admin_login_required
@@ -240,10 +388,11 @@ def admin_dashboard():
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
     return render_template_string(
-        f'''<h2>Server Status</h2>
-            <p>Registered users: {users_count}</p>
-            <table border="1" cellpadding="5">{rows}</table>
-            <a href="{{{{ url_for('admin_logout') }}}}">Logout</a>'''
+        STYLE
+        + f"<div class='container'><h2>Server Status</h2>"
+        + f"<p>Registered users: {users_count}</p>"
+        + f"<table>{rows}</table>"
+        + f"<a href='{url_for('admin_logout')}'>Logout</a></div>"
     )
 
 
@@ -595,6 +744,7 @@ def version_history():
 
 
 @app.get('/api/download_update')
+@auth_required
 def download_update():
     path = os.environ.get('LATEST_BINARY', '')
     if not path or not os.path.exists(path):
@@ -602,6 +752,7 @@ def download_update():
     return send_file(path, as_attachment=True)
 
 @app.get('/release')
+@auth_required
 def release_file():
     """Direct download of the latest FireGuard release."""
     path = os.environ.get('LATEST_BINARY', '')
