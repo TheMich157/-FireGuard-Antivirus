@@ -3,8 +3,8 @@ import os
 import tkinter as tk
 import ttkbootstrap as ttkb
 from ttkbootstrap import ttk
+from tkinter import messagebox, simpledialog
 import requests
-from tkinter import messagebox
 
 API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
@@ -53,23 +53,38 @@ class EXDApp:
         top = ttk.Frame(self.root, padding=10)
         top.pack(fill=tk.X)
 
+        ttk.Button(top, text="Refresh Clients", command=self.load_clients).pack(side=tk.LEFT)
         ttk.Button(top, text="Fetch Logs", command=self.fetch_logs).pack(side=tk.LEFT)
+        ttk.Button(top, text="Push Update", command=self.push_update).pack(side=tk.LEFT)
+        ttk.Button(top, text="Remove Client", command=self.remove_client).pack(side=tk.LEFT)
         ttk.Button(top, text="Logout", command=self.create_login_ui).pack(side=tk.RIGHT)
 
-        self.log_text = tk.Text(self.root, state=tk.DISABLED)
+        self.clients_tree = ttk.Treeview(self.root, columns=("username", "hwid", "banned"), show="headings")
+        for col in ("username", "hwid", "banned"):
+            self.clients_tree.heading(col, text=col.title())
+        self.clients_tree.pack(fill=tk.X, padx=10, pady=10)
+
+        self.log_text = tk.Text(self.root, state=tk.DISABLED, height=10)
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.poll_logs()
+        self.load_clients()
 
     def fetch_logs(self):
-        self.load_logs()
+        item = self.clients_tree.selection()
+        hwid = None
+        if item:
+            hwid = self.clients_tree.item(item[0]).get("values", [None, None])[1]
+        self.load_logs(hwid)
 
-    def load_logs(self):
+    def load_logs(self, hwid=None):
         if not self.token:
             return
         headers = {"Authorization": f"Bearer {self.token}"}
+        params = {"hwid": hwid} if hwid else {}
         try:
-            resp = requests.get(f"{API_URL}/api/logs", headers=headers, timeout=5)
+            resp = requests.get(
+                f"{API_URL}/api/logs", headers=headers, params=params, timeout=5
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 self.display_logs("\n".join(data.get("logs", [])))
@@ -84,9 +99,69 @@ class EXDApp:
         self.log_text.insert(tk.END, text)
         self.log_text.configure(state=tk.DISABLED)
 
-    def poll_logs(self):
-        self.load_logs()
-        self.root.after(5000, self.poll_logs)
+    def load_clients(self):
+        if not self.token:
+            return
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            resp = requests.get(f"{API_URL}/api/clients", headers=headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json().get("clients", [])
+                self.clients_tree.delete(*self.clients_tree.get_children())
+                for c in data:
+                    self.clients_tree.insert("", tk.END, values=(c.get("username"), c.get("hwid"), c.get("banned")))
+            else:
+                messagebox.showerror("Error", resp.text)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def push_update(self):
+        if not self.token:
+            return
+        version = simpledialog.askstring("Push Update", "New version tag:")
+        if not version:
+            return
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            resp = requests.post(
+                f"{API_URL}/api/set_version",
+                headers=headers,
+                json={"version": version},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                messagebox.showinfo("Success", "Version updated")
+            else:
+                messagebox.showerror("Error", resp.text)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def remove_client(self):
+        if not self.token:
+            return
+        item = self.clients_tree.selection()
+        if not item:
+            return
+        values = self.clients_tree.item(item[0]).get("values")
+        if not values:
+            return
+        username, hwid = values[0], values[1]
+        if not messagebox.askyesno("Remove", f"Remove {username}?"):
+            return
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            resp = requests.post(
+                f"{API_URL}/api/remove_user",
+                headers=headers,
+                json={"username": username, "hwid": hwid},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                self.load_clients()
+            else:
+                messagebox.showerror("Error", resp.text)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
 if __name__ == "__main__":
     EXDApp()
