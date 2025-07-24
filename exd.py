@@ -22,11 +22,11 @@ class EXDApp:
         frm.pack(expand=True)
 
         ttk.Label(frm, text="Username").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.username_var = tk.StringVar(value="admin")
+        self.username_var = tk.StringVar()
         ttk.Entry(frm, textvariable=self.username_var, width=30).grid(row=0, column=1)
 
         ttk.Label(frm, text="Password").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.password_var = tk.StringVar(value="admin")
+        self.password_var = tk.StringVar()
         ttk.Entry(frm, textvariable=self.password_var, show="*", width=30).grid(row=1, column=1)
 
         ttk.Button(frm, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
@@ -246,40 +246,7 @@ class EXDApp:
         except Exception as e:
             messagebox.showerror("Error", str(e))
         
-    def create_main_ui(self):
-        self.clear_root()
-        self.root.geometry("800x600")
-        top = ttk.Frame(self.root, padding=10)
-        top.pack(fill=tk.X)
-        ttk.Button(top, text="Refresh Clients", command=self.load_clients).pack(side=tk.LEFT)
-        ttk.Button(top, text="Fetch Logs", command=self.fetch_logs).pack(side=tk.LEFT)
-        ttk.Button(top, text="Push Update", command=self.create_push_update_ui).pack(side=tk.LEFT)
-        ttk.Button(top, text="Toggle Ban", command=self.toggle_ban).pack(side=tk.LEFT)
-        ttk.Button(top, text="Remove Client", command=self.remove_client).pack(side=tk.LEFT)
-        ttk.Button(top, text="License Check", command=self.create_license_check_ui).pack(side=tk.LEFT)
-        ttk.Button(top, text="Logout", command=self.create_login_ui).pack(side=tk.RIGHT)
-        self.clients_tree = ttk.Treeview(self.root, columns=("username", "hwid", "banned"), show="headings")
-        for col in ("username", "hwid", "banned"):
-            self.clients_tree.heading(col, text=col.title())
-        self.clients_tree.pack(fill=tk.X, padx=10, pady=10)
-        self.log_text = tk.Text(self.root, height=10)
-        self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        self.log_text.bind("<Key>", lambda e: "break")
-        copy_btn = ttk.Button(top, text="Copy Logs", command=self.copy_logs)
-        copy_btn.pack(side=tk.RIGHT)
-        self.load_clients()
-        self.poll_logs()
-        self.log_text.insert(tk.END, "Welcome to EXD Developer Tool!\n")
-        self.log_text.insert(tk.END, "Use the buttons above to manage clients and perform actions.\n")
-        self.log_text.insert(tk.END, "You can also check the license status and push updates.\n")
-        self.log_text.insert(tk.END, "All actions are logged in the text area below.\n")
-        self.log_text.insert(tk.END, "Make sure to have the correct API URL set in the environment variable 'API_URL'.\n")
-        self.log_text.insert(tk.END, "Enjoy using the EXD Developer Tool!\n")                   
-        self.log_text.see(tk.END)
-        self.license_check()
-        self.create_license_check_ui()
-        self.create_push_update_ui()
-        
+
 
 
 if __name__ == "__main__":
