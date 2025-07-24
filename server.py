@@ -196,7 +196,7 @@ def home_page():
         <h1>FireGuard Antivirus</h1>
         <p>Welcome to the FireGuard API server.</p>
         <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
-        <p>Project homepage: <a href='https://wsl-agjq.onrender.com/'>wsl-agjq.onrender.com</a></p>
+        <p>Project homepage: <a href='https://fireguard-antivirus.onrender.com/'>https://fireguard-antivirus.onrender.com</a></p>
         """
     )
 
