@@ -160,6 +160,10 @@ def admin_logout():
     session.pop('admin', None)
     return redirect(url_for('admin_login'))
 
+@app.route('/')
+def root_redirect():
+    """Redirect bare root to the admin login."""
+    return redirect(url_for('admin_login'))
 
 @app.route('/admin')
 @admin_login_required
@@ -174,11 +178,14 @@ def admin_dashboard():
             status = 'Online' if resp.status_code < 500 else 'Offline'
             statuses.append(status)
     users_count = users.count_documents({})
-    rows = ''.join(
-        f'<tr><td>{p}</td><td style="color:{"green" if s=="Online" else "red"}">'
-        f'{s}</td></tr>'
-        for p, s in zip(api_routes, statuses)
-    )
+    rows = ''
+    for p, s in zip(api_routes, statuses):
+        color = "green" if s == "Online" else "red"
+        if any(rule.rule == p and "GET" in rule.methods for rule in app.url_map.iter_rules()):
+            link = f'<a href="{p}">{p}</a>'
+        else:
+            link = p
+        rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
     return render_template_string(
         f'''<h2>Server Status</h2>
             <p>Registered users: {users_count}</p>
@@ -536,6 +543,14 @@ def version_history():
 
 @app.get('/api/download_update')
 def download_update():
+    path = os.environ.get('LATEST_BINARY', '')
+    if not path or not os.path.exists(path):
+        return jsonify({'error': 'not found'}), 404
+    return send_file(path, as_attachment=True)
+
+@app.get('/release')
+def release_file():
+    """Direct download of the latest FireGuard release."""
     path = os.environ.get('LATEST_BINARY', '')
     if not path or not os.path.exists(path):
         return jsonify({'error': 'not found'}), 404
