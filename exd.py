@@ -1,11 +1,12 @@
 # Developer tool for FireGuard - EXD
+import os
 import tkinter as tk
 import ttkbootstrap as ttkb
 from ttkbootstrap import ttk
 import requests
 from tkinter import messagebox
 
-API_URL = "https://fireguard-antivirus.onrender.com"  # TODO: replace with real API endpoint
+API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
 class EXDApp:
     def __init__(self):
@@ -20,11 +21,11 @@ class EXDApp:
         frm.pack(expand=True)
 
         ttk.Label(frm, text="Username").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.username_var = tk.StringVar()
+        self.username_var = tk.StringVar(value="admin")
         ttk.Entry(frm, textvariable=self.username_var, width=30).grid(row=0, column=1)
 
         ttk.Label(frm, text="Password").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.password_var = tk.StringVar()
+        self.password_var = tk.StringVar(value="admin")
         ttk.Entry(frm, textvariable=self.password_var, show="*", width=30).grid(row=1, column=1)
 
         ttk.Button(frm, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
