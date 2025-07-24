@@ -846,6 +846,25 @@ class FireGuardApp:
 
         self.observer.start()
 
+    def check_license(self):
+        if not TOKEN:
+            self.authenticate()
+        if not TOKEN:
+            messagebox.showerror("FireGuard", "You must be logged in to use this feature.")
+            return
+        r = api_get("/api/check_license", {"hwid": HWID})
+        if r is None or not r.ok:
+            messagebox.showerror("FireGuard", "License check failed. Please try again later.")
+            return
+        data = r.json()
+        if data.get("valid"):
+            messagebox.showinfo("FireGuard", "Your license is valid.")
+        else:
+            messagebox.showwarning("FireGuard", "Your license is invalid or expired.")
+        if data.get("banned"):
+            reason = data.get("reason") or "User banned"
+            kill_switch(reason)
+
 if __name__ == '__main__':
  app = FireGuardApp(ttkb.Window())
  app.check_for_updates_gui()

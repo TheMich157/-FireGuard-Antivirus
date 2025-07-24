@@ -24,14 +24,40 @@ import requests
 # Simple CSS style used by rendered pages
 STYLE = """
 <style>
-body {font-family: Arial, sans-serif; background:#f0f2f5; margin:40px; color:#333;}
-h1, h2 {color:#d9534f;}
-table {border-collapse: collapse; width:100%;}
-th, td {padding:8px 12px; border:1px solid #ccc;}
-a {color:#0275d8; text-decoration:none;}
-table {border-collapse: collapse; width:100%; background:#fff;}
-th {background:#eee; text-align:left;}
-th, td {padding:8px 12px; border:1px solid #ccc;}
+body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(#fff, #e3ebf3);
+    color: #222;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+}
+h1 {color:#dc3545;}
+h2 {color:#0275d8;}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background:#fff;
+    border-radius:4px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+th {background:#f7f7f7; text-align:left;}
+tr:nth-child(odd) {background:#fbfbfb;}
+th, td {padding:8px 12px; border-bottom:1px solid #ddd;}
+button {
+    background:#dc3545; color:#fff; border:none;
+    padding:8px 14px; border-radius:4px; cursor:pointer;
+}
+button:hover {background:#c9302c;}
+input {
+    padding:6px 8px; margin-bottom:10px; width:100%;
+    border:1px solid #ccc; border-radius:4px;
+}
+.container {max-width:800px;margin:auto;}
+.card {
+    padding:15px; background:#fff; border-radius:4px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom:20px;
+}
 </style>
 """
 
@@ -223,7 +249,7 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         error = 'Invalid credentials'
     return render_template_string(
-        STYLE + '''<form method="post" style="max-width:300px;margin:auto;">
+        STYLE + '''<form method="post" class="container" style="max-width:300px;">
             <h2>Admin Login</h2>
             <p style="color:red;">{{error}}</p>
             <input name="username" placeholder="Username" style="width:100%;margin-bottom:10px;">
@@ -244,29 +270,23 @@ LANDING_PAGE = """
 <html>
 <head>
     <title>FireGuard Antivirus</title>
-    <style>
-        body {font-family: Arial, sans-serif; background:#f0f2f5; margin:40px;}
-        h1 {color:#d9534f;}
-        input, button {padding:6px;margin-bottom:10px;}
-        #status{margin-bottom:20px;color:#0275d8;}
-    </style>
+
 </head>
-<body>
+<body class="container">
     <h1>FireGuard Antivirus</h1>
     <p id="status"></p>
-    <div id="forms">
+    <div class="card">
         <h2>Register</h2>
-        <input id="reg_user" placeholder="Username"><br>
-        <input id="reg_pass" type="password" placeholder="Password"><br>
+        <input id="reg_user" placeholder="Username">
+        <input id="reg_pass" type="password" placeholder="Password">
         <button onclick="register()">Register</button>
 
         <h2>Login</h2>
-        <input id="log_user" placeholder="Username"><br>
-        <input id="log_pass" type="password" placeholder="Password"><br>
+        <input id="log_user" placeholder="Username">
+        <input id="log_pass" type="password" placeholder="Password">
         <button onclick="login()">Login</button>
     </div>
-    <p>API reference: <a href='/docs'>/docs</a></p>
-    <p>Admin: <a href='/admin'>dashboard</a></p>
+    <p>API reference: <a href='/docs'>/docs</a> | <a href='/admin'>Admin</a></p>
 <script>
 async function register(){
     const res = await fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('reg_user').value, password:document.getElementById('reg_pass').value})});
@@ -287,7 +307,7 @@ async function login(){
 @app.route('/')
 def home_page():
     """Interactive landing page with register/login forms."""
-    return render_template_string(LANDING_PAGE)
+    return render_template_string(STYLE + LANDING_PAGE)
 
 @app.route('/docs')
 def docs_index():
@@ -298,7 +318,8 @@ def docs_index():
             f"<tr><td><a href='/docs{path}'>{path}</a></td><td>{method}</td><td>{desc}</td></tr>"
         )
     table = "<table><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>" + "".join(rows) + "</table>"
-    return render_template_string(STYLE + "<h2>API Documentation</h2>" + table)
+    html = f"<div class='container'><h2>API Documentation</h2>{table}</div>"
+    return render_template_string(STYLE + html)
 
 
 @app.route('/docs/api/<path:path>')
@@ -316,11 +337,13 @@ def docs_page(path):
         return redirect(f'/api/{path}')
     method, desc = info
     html = (
+        f"<div class='container'>"
         f"<h2>{endpoint}</h2>"
         f"<p><strong>Method:</strong> {method}</p>"
         f"<p>{desc}</p>"
         f"<p><a href='{endpoint}'>Go to endpoint</a></p>"
         f"<p><a href='/docs'>&larr; Back to index</a></p>"
+        f"</div>"
     )
     return render_template_string(STYLE + html)
 
@@ -364,10 +387,11 @@ def admin_dashboard():
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
     return render_template_string(
-        STYLE + f'''<h2>Server Status</h2>
-            <p>Registered users: {users_count}</p>
-            <table>{rows}</table>
-            <a href="{{{{ url_for('admin_logout') }}}}">Logout</a>'''
+        STYLE
+        + f"<div class='container'><h2>Server Status</h2>"
+        + f"<p>Registered users: {users_count}</p>"
+        + f"<table>{rows}</table>"
+        + f"<a href='{url_for('admin_logout')}'>Logout</a></div>"
     )
 
 
