@@ -119,6 +119,7 @@ if not client.server_info():
 
 PING_URL = os.environ.get('PING_URL')
 PING_INTERVAL = int(os.environ.get('PING_INTERVAL', '600'))
+LICENSE_WEBHOOK = os.environ.get('LICENSE_WEBHOOK')
 
 # Collections
 
@@ -155,7 +156,7 @@ def init_db():
         hashed = generate_password_hash(admin_pass)
         users.insert_one({'username': 'admin', 'password': hashed, 'role': 'admin', 'banned': False})
 
-LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.2.0')
+LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.3.1')
 
 # Ensure the database is initialized
 if not client.server_info():
@@ -203,6 +204,20 @@ def log_activity(user_id, action, info=None):
             'info': info,
             'ts': datetime.datetime.utcnow(),
         })
+    except Exception:
+        pass
+
+
+def send_license_webhook(username: str, license_key: str) -> None:
+    """Notify Discord when a new license is generated."""
+    if not LICENSE_WEBHOOK:
+        return
+    try:
+        requests.post(
+            LICENSE_WEBHOOK,
+            json={"content": f"New license for {username}: `{license_key}`"},
+            timeout=5,
+        )
     except Exception:
         pass
 
@@ -418,6 +433,7 @@ def register():
     }
     res = users.insert_one(user)
     log_activity(res.inserted_id, 'register', data.get('username'))
+    send_license_webhook(data.get('username'), license_key)
     token = generate_token(res.inserted_id)
     return jsonify({'token': token, 'license': license_key})
 
@@ -435,7 +451,7 @@ def login():
         users.update_one({'_id': user['_id']}, {'$set': {'hwid': hwid}})
     token = generate_token(user['_id'])
     log_activity(user['_id'], 'login')
-    return jsonify({'token': token})
+    return jsonify({'token': token, 'license': user.get('license')})
 
 
 @app.post('/api/log_error')
@@ -672,6 +688,7 @@ def add_license():
     if res.matched_count == 0:
         return jsonify({'error': 'not found'}), 404
     log_activity(request.user_id, 'add_license', username)
+    send_license_webhook(username, license_key)
     return jsonify({'license': license_key})
 
 
