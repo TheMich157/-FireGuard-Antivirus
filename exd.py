@@ -328,8 +328,6 @@ class EXDApp:
                 messagebox.showerror("Error", resp.text)
         except Exception as e:
             messagebox.showerror("Error", str(e))
-        
-
 
 
 if __name__ == "__main__":
