@@ -189,9 +189,16 @@ def admin_logout():
     return redirect(url_for('admin_login'))
 
 @app.route('/')
-def root_redirect():
-    """Redirect bare root to the admin login."""
-    return redirect(url_for('admin_login'))
+def home_page():
+    """Simple landing page for the API service."""
+    return render_template_string(
+        """
+        <h1>FireGuard Antivirus</h1>
+        <p>Welcome to the FireGuard API server.</p>
+        <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
+        <p>Project homepage: <a href='https://wsl-agjq.onrender.com/'>wsl-agjq.onrender.com</a></p>
+        """
+    )
 
 @app.route('/admin/api/<path:path>')
 @admin_login_required

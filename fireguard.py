@@ -157,6 +157,7 @@ LANGUAGES = {
         'save_log': 'Save Log',
         'save_patterns': 'Save Patterns',
         'open_quarantine': 'Open Quarantine',
+        'copy_log': 'Copy Log',
         'scan_tab': 'Scanning',
         'settings_tab': 'Settings',
         'language': 'Language',
@@ -176,6 +177,7 @@ LANGUAGES = {
         'save_log': 'Uložiť log',
         'save_patterns': 'Uložiť vzory',
         'open_quarantine': 'Otvoriť karanténu',
+        'copy_log': 'Kopírovať log',
         'scan_tab': 'Skenovanie',
         'settings_tab': 'Nastavenia',
         'language': 'Jazyk',
@@ -195,6 +197,7 @@ LANGUAGES = {
         'save_log': 'Uložit log',
         'save_patterns': 'Uložit vzory',
         'open_quarantine': 'Otevřít karanténu',
+        'copy_log': 'Kopírovat log',
         'scan_tab': 'Skenování',
         'settings_tab': 'Nastavení',
         'language': 'Jazyk',
@@ -214,6 +217,7 @@ LANGUAGES = {
         'save_log': 'Log speichern',
         'save_patterns': 'Muster speichern',
         'open_quarantine': 'Quarantäne öffnen',
+        'copy_log': 'Log kopieren',
         'scan_tab': 'Scan',
         'settings_tab': 'Einstellungen',
         'language': 'Sprache',
@@ -452,6 +456,7 @@ class FireGuardApp:
 
         self.text = ScrolledText(self.scan_tab, wrap="word", bg="black", fg="lime", insertbackground="lime")
         self.text.pack(fill="both", expand=True)
+        self.text.bind("<Key>", lambda e: "break")
 
         self.progress = ttk.Progressbar(self.scan_tab, mode="determinate")
         self.progress.pack(fill="x")
@@ -504,6 +509,8 @@ class FireGuardApp:
         self.btn_monitor.pack(side="left")
         self.btn_clear_log = ttk.Button(self.toolbar, command=self.clear_log)
         self.btn_clear_log.pack(side="right")
+        self.btn_copy_log = ttk.Button(self.toolbar, command=self.copy_log)
+        self.btn_copy_log.pack(side="right")
         self.btn_save_log = ttk.Button(self.toolbar, command=self.save_log)
         self.btn_save_log.pack(side="right")
         self.btn_update = ttk.Button(
@@ -664,6 +671,7 @@ class FireGuardApp:
         self.btn_sandbox.config(text='🧪 ' + t['sandbox_test'])
         self.btn_monitor.config(text='🟢 ' + t['monitor'])
         self.btn_clear_log.config(text='🧹 ' + t['clear_log'])
+        self.btn_copy_log.config(text='📋 ' + t['copy_log'])
         self.btn_save_log.config(text='💾 ' + t['save_log'])
         self.btn_open_quarantine.config(text='📂 ' + t['open_quarantine'])
 
@@ -713,6 +721,10 @@ class FireGuardApp:
 
     def clear_log(self):
         self.text.delete("1.0", tk.END)
+
+    def copy_log(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.text.get("1.0", tk.END))
 
     def save_log(self):
         log_path = filedialog.asksaveasfilename(defaultextension=".txt")

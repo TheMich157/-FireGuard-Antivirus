@@ -2,6 +2,8 @@
 
 FireGuard Antivirus is a Python desktop application that performs static and behavioral malware analysis. A small Flask backend manages user accounts, logs, and version updates. An optional developer tool (**EXD**) lets admins review clients, push updates and inspect logs.
 
+You can try the hosted API at [wsl-agjq.onrender.com](https://wsl-agjq.onrender.com/).
+
 ---
 
 ## Features
