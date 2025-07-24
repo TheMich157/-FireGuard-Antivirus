@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: fireguard-api
+    env: python
+    plan: free
+    startCommand: gunicorn server:app
+    buildCommand: pip install -r requirements.txt

@@ -689,11 +689,12 @@ class FireGuardApp:
                 if event.is_directory:
                     return
                 self.log(f"[!] Zistený nový súbor: {event.src_path}")
-                self.run_in_thread(self.scan_directory, event.src_path)
+                self.run_in_thread(self.scan_single, event.src_path)
                 send_scan_report("monitor", "created", 0, "")
 
         self.observer = Observer()
         self.observer.schedule(Handler(), folder, recursive=True)
+
         self.observer.start()
 
 if __name__ == '__main__':
