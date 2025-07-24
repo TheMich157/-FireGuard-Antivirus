@@ -124,3 +124,6 @@ Every endpoint requires a `Bearer` token header except `/admin` and the registra
 ---
 
 FireGuard is a work in progress and should not be trusted as a full security solution. Use it for educational purposes only.
+
+## License
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
