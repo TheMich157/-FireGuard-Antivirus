@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
@@ -39,6 +40,30 @@ VERSION = "0.1.0"
 GITHUB_REPO = "TheMich157/-FireGuard-Antivirus"
 LOG_PATH = "fireguard.log"
 THREAT_THRESHOLD = 3
+API_URL = "https://example.com"  # TODO: replace with real backend URL
+
+def get_hwid() -> str:
+    """Return a simple hardware ID based on MAC address."""
+    try:
+        import uuid
+        return hashlib.md5(str(uuid.getnode()).encode()).hexdigest()
+    except Exception:
+        return "unknown"
+
+HWID = get_hwid()
+
+def api_post(endpoint: str, data: dict):
+    """Helper to POST JSON data to the backend API."""
+    try:
+        return requests.post(f"{API_URL}{endpoint}", json=data, timeout=5)
+    except Exception:
+        return None
+
+def api_get(endpoint: str, params: dict | None = None):
+    try:
+        return requests.get(f"{API_URL}{endpoint}", params=params, timeout=5)
+    except Exception:
+        return None
 
 # Possible risks when using this program:
 # - Running unknown files may damage your system.
@@ -244,6 +269,40 @@ def classify_score(score):
         return "Medium"
     return "Low"
 
+def send_error_log(msg: str):
+    api_post("/api/log_error", {"hwid": HWID, "error": msg})
+
+def send_scan_report(file: str, level: str, score: int, md5: str):
+    api_post(
+        "/api/scan_report",
+        {"hwid": HWID, "file": file, "level": level, "score": score, "md5": md5},
+    )
+
+def verify_integrity():
+    """Send file hash to server and exit if tampered."""
+    try:
+        with open(__file__, "rb") as f:
+            hash_ = hashlib.md5(f.read()).hexdigest()
+        r = api_post("/api/verify_integrity", {"hwid": HWID, "hash": hash_})
+        if isinstance(r, requests.Response) and r.ok:
+            data = r.json()
+            if data.get("tampered"):
+                kill_switch("Integrity failure")
+    except Exception:
+        pass
+
+def check_status():
+    resp = api_get("/api/status", {"hwid": HWID})
+    if resp is not None and resp.status_code == 200:
+        data = resp.json()
+        if data.get("banned"):
+            kill_switch("User banned")
+
+def kill_switch(reason: str):
+    api_post("/api/report_violation", {"hwid": HWID, "reason": reason})
+    messagebox.showerror("FireGuard", f"Application disabled: {reason}")
+    sys.exit(1)
+
 def run_in_real_sandbox(path):
     try:
         temp_dir = tempfile.mkdtemp(prefix="sandbox_")
@@ -323,6 +382,8 @@ class FireGuardApp:
         self.lang = 'en'
         self.theme = 'flatly'
         self.style.theme_use(self.theme)
+        check_status()
+        verify_integrity()
         FireGuardApp.check_for_updates_gui = check_for_updates_gui
         icon_path = os.path.join(os.path.dirname(__file__), "fireguard_favicon.ico")
         if os.path.exists(icon_path):
@@ -418,7 +479,12 @@ class FireGuardApp:
         self.log_imports()
 
     def run_in_thread(self, func, *args):
-        threading.Thread(target=func, args=args, daemon=True).start()
+        def wrapper():
+            try:
+                func(*args)
+            except Exception as e:
+                send_error_log(str(e))
+        threading.Thread(target=wrapper, daemon=True).start()
 
     def log(self, msg):
         self.text.insert("end", msg + "\n")
@@ -429,6 +495,7 @@ class FireGuardApp:
                 f.write(msg + "\n")
         except Exception:
             pass
+        send_scan_report("log", "info", 0, "") if msg else None
 
     def log_imports(self):
         self.log("[✓] Načítané moduly:")
@@ -476,6 +543,7 @@ class FireGuardApp:
             self.run_in_thread(self.scan_directory, extract_to)
         else:
             self.log(f"[ERROR] Extrakcia zlyhala: {output}")
+            send_error_log(output)
 
     def scan_file(self):
         path = filedialog.askopenfilename(filetypes=[("Súbory", "*.*")])
@@ -504,6 +572,7 @@ class FireGuardApp:
             messagebox.showinfo("Vzory", "Vzory uložené.")
         except Exception as e:
             messagebox.showerror("Vzory", f"Chyba: {e}")
+            send_error_log(str(e))
 
     def clear_log(self):
         self.text.delete("1.0", tk.END)
@@ -524,6 +593,7 @@ class FireGuardApp:
                 subprocess.Popen(['xdg-open', qdir])
         except Exception:
             messagebox.showinfo('Quarantine', qdir)
+            send_error_log('open_quarantine_failed')
 
     def scan_single(self, path):
         file = os.path.basename(path)
@@ -545,7 +615,11 @@ class FireGuardApp:
                 qdir = os.path.join(os.getcwd(), "quarantine")
                 os.makedirs(qdir, exist_ok=True)
                 shutil.move(path, os.path.join(qdir, file))
+                send_scan_report(file, level, score, md5)
                 return
+            send_scan_report(file, level, score, md5)
+        else:
+            send_scan_report(file, "Clean", score, md5)
         if file.endswith(".exe") or file.endswith(".dll"):
             for line in analyze_exe_core(path):
                 self.log(line)
@@ -587,6 +661,7 @@ class FireGuardApp:
     def _behavior_task(self, path):
         for line in scan_file_behavior(path):
             self.log(line)
+            send_scan_report(os.path.basename(path), "behavior", 0, "")
 
     def run_sandbox(self):
         path = filedialog.askopenfilename(filetypes=[("Executable", "*.exe")])
@@ -600,11 +675,13 @@ class FireGuardApp:
                 self.monitoring = True
                 self.log(f"[✓] Spustený real-time monitoring priečinka: {folder}")
                 self.start_monitoring(folder)
+                send_scan_report("monitor", "start", 0, "")
         else:
             self.observer.stop()
             self.observer.join()
             self.monitoring = False
             self.log("[•] Real-time monitoring ukončený.")
+            send_scan_report("monitor", "stop", 0, "")
 
     def start_monitoring(self, folder):
         class Handler(FileSystemEventHandler):
@@ -613,6 +690,7 @@ class FireGuardApp:
                     return
                 self.log(f"[!] Zistený nový súbor: {event.src_path}")
                 self.run_in_thread(self.scan_directory, event.src_path)
+                send_scan_report("monitor", "created", 0, "")
 
         self.observer = Observer()
         self.observer.schedule(Handler(), folder, recursive=True)
