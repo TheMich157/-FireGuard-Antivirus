@@ -8,9 +8,13 @@ from functools import wraps
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dwdhwuhdkwhudkwdhwudhwuhd')
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/FireGuard')
+MONGO_URI = os.environ.get(
+    'MONGO_URI',
+    'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+)
+DB_NAME = os.environ.get('MONGO_DB_NAME', 'FireGuard')
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
-db = client.get_default_database()
+db = client[DB_NAME]
 
 users = db['users']
 logs = db['logs']
@@ -113,6 +117,18 @@ def check_update():
     return jsonify({'latest': LATEST_VERSION})
 
 
+@app.post('/api/set_version')
+@auth_required
+def set_version():
+    data = request.get_json() or {}
+    ver = data.get('version')
+    if not ver:
+        return jsonify({'error': 'missing version'}), 400
+    global LATEST_VERSION
+    LATEST_VERSION = ver
+    return jsonify({'status': 'ok', 'latest': LATEST_VERSION})
+
+
 @app.get('/api/status')
 @auth_required
 def status():
@@ -140,10 +156,57 @@ def report_violation():
     return jsonify({'status': 'ok'})
 
 
+@app.get('/api/clients')
+@auth_required
+def list_clients():
+    data = list(users.find({}, {'username': 1, 'hwid': 1, 'banned': 1}))
+    clients = [
+        {
+            'username': u.get('username'),
+            'hwid': u.get('hwid'),
+            'banned': u.get('banned', False),
+        }
+        for u in data
+    ]
+    return jsonify({'clients': clients})
+
+
+@app.post('/api/remove_user')
+@auth_required
+def remove_user():
+    data = request.get_json() or {}
+    query = {}
+    if data.get('username'):
+        query['username'] = data['username']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    user = users.find_one(query)
+    if not user:
+        return jsonify({'status': 'not found'}), 404
+    users.delete_one({'_id': user['_id']})
+    if user.get('hwid'):
+        logs.delete_many({'hwid': user['hwid']})
+        scans.delete_many({'hwid': user['hwid']})
+        violations.delete_many({'hwid': user['hwid']})
+    return jsonify({'status': 'removed'})
+
+
 @app.get('/api/logs/<hwid>')
 @auth_required
 def get_logs(hwid):
     data = list(logs.find({'hwid': hwid}).sort('ts', -1))
+    entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
+    return jsonify({'logs': entries})
+
+
+@app.get('/api/logs')
+@auth_required
+def get_all_logs():
+    hwid = request.args.get('hwid')
+    query = {'hwid': hwid} if hwid else {}
+    data = list(logs.find(query).sort('ts', -1))
     entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
     return jsonify({'logs': entries})
 

@@ -103,7 +103,8 @@ token is stored locally and used for all API communication.
 
 ### Developer Tool EXD
 
-The EXD developer tool allows administrators to log in and monitor client activity.
+The EXD developer tool allows administrators to log in and manage connected clients.
+It can list registered users with their HWIDs, remove licenses, and remotely set a new client version which will be served via the update API.
 To run it locally:
 
 ```bash
@@ -123,3 +124,10 @@ python server.py  # local testing
 ```
 
 On Render, create a new Web Service from this repo and it will automatically use `gunicorn server:app` to start the API.
+
+Key admin endpoints include:
+
+- `GET /api/clients` – list all registered users
+- `POST /api/remove_user` – delete a user account
+- `POST /api/set_version` – update the latest client version
+- `GET /api/logs` – fetch logs (optionally by `hwid`)
