@@ -8,7 +8,11 @@ from flask import (
     render_template_string,
 )
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from flask import send_file
+import hashlib
 import jwt
 import datetime
 import os
@@ -33,6 +37,26 @@ users = db['users']
 logs = db['logs']
 scans = db['scans']
 violations = db['violations']
+versions = db['versions']
+messages = db['messages']
+feedback = db['feedback']
+activity = db['activity']
+flags = db['flags']
+reset_tokens = db['reset_tokens']
+
+def init_db():
+    users.create_index('username', unique=True)
+    users.create_index('hwid', unique=True, sparse=True)
+    messages.create_index('user_id')
+    versions.create_index('version', unique=True)
+    reset_tokens.create_index('token', unique=True, sparse=True)
+    activity.create_index('ts')
+    if not users.find_one({'username': 'admin'}):
+        admin_pass = os.environ.get('ADMIN_PASS', 'admin')
+        hashed = generate_password_hash(admin_pass)
+        users.insert_one({'username': 'admin', 'password': hashed, 'role': 'admin', 'banned': False})
+    if versions.count_documents({}) == 0:
+        versions.insert_one({'version': LATEST_VERSION, 'ts': datetime.datetime.utcnow()})
 
 def init_db():
     users.create_index('username', unique=True)
@@ -42,14 +66,14 @@ def init_db():
         hashed = generate_password_hash(admin_pass)
         users.insert_one({'username': 'admin', 'password': hashed, 'role': 'admin', 'banned': False})
 
+LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.2.0')
+
 init_db()
 
 # API URL
 API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
 
-# Versioning
-LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.1.0')
 
 
 def generate_token(user_id):
@@ -58,6 +82,19 @@ def generate_token(user_id):
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
     }
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+
+def log_activity(user_id, action, info=None):
+    """Record an admin or user action."""
+    try:
+        activity.insert_one({
+            'user_id': str(user_id),
+            'action': action,
+            'info': info,
+            'ts': datetime.datetime.utcnow(),
+        })
+    except Exception:
+        pass
 
 def decode_token(token):
     try:
@@ -160,6 +197,7 @@ def register():
     hashed = generate_password_hash(data['password'])
     user = {'username': data['username'], 'password': hashed, 'hwid': data.get('hwid'), 'banned': False}
     res = users.insert_one(user)
+    log_activity(res.inserted_id, 'register', data.get('username'))
     token = generate_token(res.inserted_id)
     return jsonify({'token': token})
 
@@ -176,6 +214,7 @@ def login():
     if hwid and not user.get('hwid'):
         users.update_one({'_id': user['_id']}, {'$set': {'hwid': hwid}})
     token = generate_token(user['_id'])
+    log_activity(user['_id'], 'login')
     return jsonify({'token': token})
 
 
@@ -216,8 +255,34 @@ def set_version():
         return jsonify({'error': 'missing version'}), 400
     global LATEST_VERSION
     LATEST_VERSION = ver
+    versions.insert_one({'version': ver, 'ts': datetime.datetime.utcnow()})
+    log_activity(request.user_id, 'set_version', ver)
     return jsonify({'status': 'ok', 'latest': LATEST_VERSION})
 
+
+@app.post('/api/set_banned')
+@auth_required
+def set_banned():
+    data = request.get_json() or {}
+    query = {}
+    if data.get('username'):
+        query['username'] = data['username']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    user = users.find_one(query)
+    if not user:
+        return jsonify({'error': 'not found'}), 404
+    banned = bool(data.get('banned'))
+    update = {'banned': banned}
+    if banned:
+        update['ban_reason'] = data.get('reason', 'banned by admin')
+        users.update_one({'_id': user['_id']}, {'$set': update})
+    else:
+        users.update_one({'_id': user['_id']}, {'$set': update, '$unset': {'ban_reason': ''}})
+        log_activity(request.user_id, 'set_banned', {'target': str(user['_id']), 'banned': banned})
+    return jsonify({'status': 'ok', 'banned': banned})
 
 
 @app.get('/api/status')
@@ -227,7 +292,11 @@ def status():
     user = users.find_one({'hwid': hwid})
     if not user:
         return jsonify({'trusted': False}), 404
-    return jsonify({'trusted': not user.get('banned', False), 'banned': user.get('banned', False)})
+    return jsonify({
+        'trusted': not user.get('banned', False),
+        'banned': user.get('banned', False),
+        'reason': user.get('ban_reason')
+    })
 
 
 @app.post('/api/verify_integrity')
@@ -235,6 +304,7 @@ def status():
 def verify_integrity():
     data = request.get_json() or {}
     # Placeholder integrity check
+    
     tampered = False
     return jsonify({'tampered': tampered})
 
@@ -280,6 +350,7 @@ def remove_user():
         logs.delete_many({'hwid': user['hwid']})
         scans.delete_many({'hwid': user['hwid']})
         violations.delete_many({'hwid': user['hwid']})
+        log_activity(request.user_id, 'remove_user', str(user['_id']))
     return jsonify({'status': 'removed'})
 
 
@@ -299,6 +370,246 @@ def get_all_logs():
     data = list(logs.find(query).sort('ts', -1))
     entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
     return jsonify({'logs': entries})
+
+@app.get('/api/logs/errors')
+@auth_required
+def get_error_logs():
+    data = list(logs.find({'error': {'$exists': True}}).sort('ts', -1))
+    entries = [f"{d.get('ts')}: {d.get('error')}" for d in data]
+    return jsonify({'logs': entries})
+
+@app.get('/api/activity_log')
+@auth_required
+def activity_log_route():
+    uid = request.args.get('user_id')
+    query = {'user_id': uid} if uid else {}
+    data = list(activity.find(query).sort('ts', -1))
+    entries = [
+        {
+            'user_id': a.get('user_id'),
+            'action': a.get('action'),
+            'info': a.get('info'),
+            'ts': a.get('ts'),
+        }
+        for a in data
+    ]
+    return jsonify({'activity': entries})
+
+
+@app.post('/api/ban')
+@auth_required
+def ban_user():
+    data = request.get_json() or {}
+    query = {}
+    if data.get('username'):
+        query['username'] = data['username']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    users.update_one(query, {'$set': {'banned': True, 'ban_reason': data.get('reason', 'banned')}})
+    log_activity(request.user_id, 'ban', query)
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/unban')
+@auth_required
+def unban_user():
+    data = request.get_json() or {}
+    query = {}
+    if data.get('username'):
+        query['username'] = data['username']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    users.update_one(query, {'$set': {'banned': False}, '$unset': {'ban_reason': ''}})
+    log_activity(request.user_id, 'unban', query)
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/unlink_hwid')
+@auth_required
+def unlink_hwid():
+    user_id = request.user_id
+    users.update_one({'_id': ObjectId(user_id)}, {'$unset': {'hwid': ''}})
+    log_activity(user_id, 'unlink_hwid')
+    return jsonify({'status': 'ok'})
+
+
+@app.get('/api/me')
+@auth_required
+def me():
+    user = users.find_one({'_id': ObjectId(request.user_id)})
+    if not user:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify({'username': user['username'], 'hwid': user.get('hwid'), 'banned': user.get('banned', False)})
+
+
+
+@app.post('/api/change_password')
+@auth_required
+def change_password():
+    data = request.get_json() or {}
+    new_pass = data.get('new_password')
+    if not new_pass:
+        return jsonify({'error': 'missing new password'}), 400
+    users.update_one({'_id': ObjectId(request.user_id)}, {'$set': {'password': generate_password_hash(new_pass)}})
+    log_activity(request.user_id, 'change_password')
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/logout')
+@auth_required
+def logout():
+    log_activity(request.user_id, 'logout')
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/reset_password_request')
+def reset_password_request():
+    data = request.get_json() or {}
+    user = users.find_one({'username': data.get('username')})
+    if not user:
+        return jsonify({'error': 'not found'}), 404
+    token = jwt.encode({'uid': str(user['_id']), 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)}, app.config['SECRET_KEY'], algorithm='HS256')
+    reset_tokens.insert_one({'token': token, 'uid': user['_id'], 'ts': datetime.datetime.utcnow()})
+    return jsonify({'token': token})
+
+
+@app.post('/api/reset_password')
+def reset_password():
+    data = request.get_json() or {}
+    token = data.get('token')
+    new_pass = data.get('new_password')
+    rec = reset_tokens.find_one({'token': token})
+    if not rec or not new_pass:
+        return jsonify({'error': 'invalid'}), 400
+    users.update_one({'_id': rec['uid']}, {'$set': {'password': generate_password_hash(new_pass)}})
+    reset_tokens.delete_one({'_id': rec['_id']})
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/refresh_token')
+@auth_required
+def refresh_token():
+    new_token = generate_token(request.user_id)
+    log_activity(request.user_id, 'refresh_token')
+    return jsonify({'token': new_token})
+
+
+@app.get('/api/inbox')
+@auth_required
+def inbox():
+    msgs = list(messages.find({'user_id': ObjectId(request.user_id)}).sort('ts', -1))
+    out = [{'id': str(m['_id']), 'msg': m['msg'], 'read': m.get('read', False)} for m in msgs]
+    return jsonify({'messages': out})
+
+
+@app.post('/api/inbox/send')
+@auth_required
+def inbox_send():
+    data = request.get_json() or {}
+    uid = data.get('user_id')
+    msg = data.get('msg')
+    if not uid or not msg:
+        return jsonify({'error': 'missing fields'}), 400
+    messages.insert_one({'user_id': ObjectId(uid), 'msg': msg, 'read': False, 'ts': datetime.datetime.utcnow()})
+    log_activity(request.user_id, 'inbox_send', uid)
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/inbox/read/<id>')
+@auth_required
+def inbox_read(id):
+    messages.update_one({'_id': ObjectId(id), 'user_id': ObjectId(request.user_id)}, {'$set': {'read': True}})
+    log_activity(request.user_id, 'inbox_read', id)
+    return jsonify({'status': 'ok'})
+
+
+@app.get('/api/version_history')
+def version_history():
+    data = list(versions.find({}).sort('ts', -1))
+    out = [{'version': v['version'], 'ts': v['ts']} for v in data]
+    return jsonify({'history': out})
+
+
+@app.get('/api/download_update')
+def download_update():
+    path = os.environ.get('LATEST_BINARY', '')
+    if not path or not os.path.exists(path):
+        return jsonify({'error': 'not found'}), 404
+    return send_file(path, as_attachment=True)
+
+
+@app.get('/api/stats')
+@auth_required
+def stats():
+    return jsonify({'users': users.count_documents({}), 'logs': logs.count_documents({}), 'scans': scans.count_documents({}), 'violations': violations.count_documents({})})
+
+
+@app.get('/api/violations')
+@auth_required
+def get_violations():
+    data = list(violations.find({}).sort('ts', -1))
+    out = [{'hwid': v.get('hwid'), 'reason': v.get('reason'), 'ts': v.get('ts')} for v in data]
+    return jsonify({'violations': out})
+
+
+@app.post('/api/security/kill_switch')
+@auth_required
+def kill_switch_api():
+    data = request.get_json() or {}
+    hwid = data.get('hwid')
+    if not hwid:
+        return jsonify({'error': 'missing hwid'}), 400
+    users.update_one({'hwid': hwid}, {'$set': {'banned': True, 'ban_reason': 'kill switch'}})
+    log_activity(request.user_id, 'kill_switch', hwid)
+    return jsonify({'status': 'ok'})
+
+
+
+@app.post('/api/security/flag_hwid')
+@auth_required
+def flag_hwid():
+    data = request.get_json() or {}
+    hwid = data.get('hwid')
+    if not hwid:
+        return jsonify({'error': 'missing hwid'}), 400
+    flags.insert_one({'hwid': hwid, 'ts': datetime.datetime.utcnow(), 'reason': data.get('reason')})
+    log_activity(request.user_id, 'flag_hwid', hwid)
+    return jsonify({'status': 'ok'})
+
+
+
+@app.post('/api/analyze_file')
+@auth_required
+def analyze_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'missing file'}), 400
+    f = request.files['file']
+    filename = secure_filename(f.filename)
+    data = f.read()
+    md5 = hashlib.md5(data).hexdigest()
+    score = len(data) % 10  # placeholder scoring
+    scans.insert_one({'hwid': request.args.get('hwid'), 'file': filename, 'md5': md5, 'score': score, 'level': 'analysis', 'ts': datetime.datetime.utcnow()})
+    return jsonify({'md5': md5, 'score': score})
+
+
+@app.get('/api/get_threat_score/<md5>')
+def get_threat_score(md5):
+    scan = scans.find_one({'md5': md5})
+    if not scan:
+        return jsonify({'score': None}), 404
+    return jsonify({'score': scan.get('score')})
+
+
+@app.post('/api/submit_feedback')
+@auth_required
+def submit_feedback():
+    data = request.get_json() or {}
+    feedback.insert_one({'user_id': ObjectId(request.user_id), 'msg': data.get('msg'), 'ts': datetime.datetime.utcnow()})
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
