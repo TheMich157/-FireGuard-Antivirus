@@ -121,5 +121,36 @@ A simple Flask API implementation is provided in `server.py`. You can deploy it 
 pip install -r requirements.txt
 python server.py  # local testing
 ```
-
 On Render, create a new Web Service from this repo and it will automatically use `gunicorn server:app` to start the API.
+
+Key admin endpoints include:
+
+- `GET /api/clients` – list all registered users
+- `POST /api/remove_user` – delete a user account
+- `POST /api/set_version` – update the latest client version
+- `GET /api/logs` – fetch logs (optionally by `hwid`)
+- `POST /api/set_banned` – ban or unban a client
+- `POST /api/ban` – ban with reason
+- `POST /api/unban` – remove a ban
+- `POST /api/unlink_hwid` – reset a user's HWID
+- `POST /api/security/kill_switch` – force shutdown on a client
+- `POST /api/security/flag_hwid` – mark hardware ID as suspicious
+- `GET /api/activity_log` – view admin activity history
+- `GET /api/version_history` – list all versions
+- `GET /api/download_update` – download the latest binary
+- `POST /api/change_password` – user changes their password
+- `GET /api/me` – current user info
+- `POST /api/logout` – logout current token
+- `POST /api/reset_password_request` – create password reset token
+- `POST /api/reset_password` – complete password reset
+- `POST /api/refresh_token` – issue new JWT
+- `GET /api/stats` – basic usage stats
+- `POST /api/inbox/send` – send a message to a user
+- `GET /api/inbox` – list inbox messages
+- `POST /api/inbox/read/<id>` – mark message read
+- `GET /api/violations` – list logged violations
+- `GET /api/logs/errors` – only error logs
+- `POST /api/analyze_file` – upload a file for scoring
+- `GET /api/get_threat_score/<md5>` – query score by hash
+- `POST /api/submit_feedback` – user submits feedback
+- Visit `/admin` in a browser to access a simple dashboard showing endpoint health and user count (login with your EXD credentials).
