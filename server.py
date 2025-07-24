@@ -7,15 +7,26 @@ import os
 from functools import wraps
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'changeme')
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
-client = MongoClient(MONGO_URI)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dwdhwuhdkwhudkwdhwudhwuhd')
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/FireGuard')
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
 db = client.get_default_database()
 
 users = db['users']
 logs = db['logs']
 scans = db['scans']
 violations = db['violations']
+
+def init_db():
+    users.create_index('username', unique=True)
+    users.create_index('hwid', unique=True, sparse=True)
+    if not users.find_one({'username': 'admin'}):
+        admin_pass = os.environ.get('ADMIN_PASS', 'admin')
+        hashed = generate_password_hash(admin_pass)
+        users.insert_one({'username': 'admin', 'password': hashed, 'role': 'admin', 'banned': False})
+
+init_db()
+
 
 LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.1.0')
 
@@ -64,6 +75,11 @@ def login():
     user = users.find_one({'username': data.get('username')})
     if not user or not check_password_hash(user['password'], data.get('password', '')):
         return jsonify({'error': 'invalid'}), 401
+    hwid = data.get('hwid')
+    if user.get('hwid') and hwid and user['hwid'] != hwid:
+        return jsonify({'error': 'hwid mismatch'}), 403
+    if hwid and not user.get('hwid'):
+        users.update_one({'_id': user['_id']}, {'$set': {'hwid': hwid}})
     token = generate_token(user['_id'])
     return jsonify({'token': token})
 
