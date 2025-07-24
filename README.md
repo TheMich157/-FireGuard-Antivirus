@@ -1,156 +1,124 @@
 # 🦠 FireGuard Antivirus
 
-**FireGuard Antivirus** is a powerful real-time desktop application built in Python with a Tkinter GUI. It provides static and behavioral analysis of files (especially `.exe`, scripts, and zip archives), detects malware patterns, scans behavioral anomalies, and even runs files in a real sandboxed environment.
+FireGuard Antivirus is a Python desktop application that performs static and behavioral malware analysis. A small Flask backend manages user accounts, logs, and version updates. An optional developer tool (**EXD**) lets admins review clients, push updates and inspect logs.
 
 ---
 
-
-## 📦 Features
-
-- 🔍 **Pattern-Based Threat Detection**
-  - Scans code/scripts for known malicious patterns using regex scoring.
-- 🧪 **Executable File Analysis**
-  - Analyzes `.exe` and `.dll` imports via `pefile`.
-  - Decompiles binaries using `strings` for deep inspection.
-- 📂 **ZIP File Extraction & Scan**
-  - Uses `7-Zip` to extract and analyze ZIP files for threats.
-- 📁 **Directory & File Scanning**
-  - Scan entire folders or individual files with progress feedback.
-- 🛑 **Stop Scans Anytime**
-  - Abort long scans with the stop button.
-- 📄 **Editable Detection Patterns**
-  - Customize regex rules via `patterns.json` in the settings tab.
-- 🔬 **Sandbox Execution**
-  - Launch `.exe` files in a real temporary sandbox for safe observation.
-- 🛜 **Behavioral Analysis**
-  - Detects active network connections of running processes.
-- 🔄 **Real-Time Directory Monitoring**
-  - Detects new files and scans them on the fly.
-- 🩺 **Behavior Scan on Demand**
-  - Runs a selected executable in a sandbox and reports suspicious network activity.
-- 📢 **Desktop Notifications & Audio Alerts**
-  - Alerts user with popups and an optional beep when threats are detected.
-- 📝 **Import Log**
-  - On startup the log shows all Python modules successfully loaded.
-- 🎨 **Light & Dark Themes**
-  - Switch between modern light or dark appearances.
-- 🌐 **Multi-language UI**
-  - Interface available in English, Slovak, Czech and German.
-- 📂 **Open Quarantine Folder**
-  - Quickly review quarantined files from the toolbar.
-  - 🔀 **Threaded Scanning**
-  - Uses multiple worker threads for faster scans.
-- ⚙️ **Adjustable Detection Threshold**
-  - Choose how sensitive the scanner is to suspicious patterns.
-- 📊 **Threat Level Classification**
-  - Results show Low/Medium/High severity ratings.
-- 📜 **Automatic Log File**
-  - All events are stored in `fireguard.log`.
-- 🪪 **MD5 Hash Display**
-  - Every scan shows the MD5 of each file.
-- 🧹 **Quarantine Management**
-  - Automatically move threats to the quarantine folder.
-- 📝 **Save & Clear Log**
-  - Manage the log directly from the toolbar.
-- 📡 **Network Behavior Viewer**
-  - View active network connections during behavior scans.
-- 🎚 **Adjustable Thread Count**
-  - Set how many threads to use for scanning.
-- 🕒 **Progress Bar Indicator**
-  - Visual progress updates during long scans.
-- 🧩 **Settings Tab**
-  - Edit patterns and options in one place.
-- 🌁 **Modern ttkbootstrap UI**
-  - Clean look & feel with dark and light themes.
-- 🖱 **Drag & Drop Files**
-  - Drop files onto the window to start an immediate scan.
+## Features
+- **Pattern Detection** – regex based scanning of scripts and executables
+- **Executable Analysis** – inspect imports of `.exe`/`.dll` files
+- **ZIP Extraction** – analyze archives using 7‑Zip
+- **Sandbox Execution** – run suspicious files in a temporary folder
+- **Real‑Time Monitoring** – watch directories for new files
+- **Behavior Scanner** – check running processes for suspicious network activity
+- **Notifications** – desktop popups and optional sound alerts
+- **Quarantine** – isolate infected files
+- **Multi‑language UI** – English, Slovak, Czech and German
+- **Modern ttkbootstrap interface** with light and dark themes
 
 ---
 
-## 🚀 How to Run
+## Quick Start
+1. Install dependencies
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Launch the client
+   ```bash
+   python fireguard.py
+   ```
+   The first run asks you to register or log in. Credentials are stored in `license.json` and used for all API calls.
 
-1. **Install Dependencies**
-
-```bash
-pip install pefile watchdog psutil plyer ttkbootstrap
-```
-
-2. **Run the application**
-
-```bash
-python fireguard.py
-```
-
-The modern interface (powered by **ttkbootstrap**) now contains two tabs: **Skenovanie** for running scans and **Nastavenia** for editing detection patterns. Use the toolbar buttons to scan files or directories, stop a running scan, request a behavior scan of a single file, open the quarantine folder, and save or clear the log. Choose your theme, language, thread count, and detection threshold in the settings tab.
-If a `fireguard.ico` is present, it becomes the window icon.
-
-### Build a Windows EXE
-
-Install [PyInstaller](https://pyinstaller.org/) and generate a single-file executable:
-
+### Building a Windows executable
 ```bash
 pip install pyinstaller
 pyinstaller --onefile --noconsole fireguard.py
 ```
 
-The compiled `fireguard.exe` automatically checks GitHub releases on startup and prompts to download a newer version if available.
-
-### Account Login
-
-FireGuard now requires users to create a free account. On first launch you will
-be prompted to register or log in. After successful authentication a license
-token is stored locally and used for all API communication.
-
-### Developer Tool EXD
-
-The EXD developer tool allows administrators to log in and monitor client activity.
-To run it locally:
-
+Set `API_URL` to point the client to your backend:
 ```bash
-python exd.py
+API_URL=https://myserver.com python fireguard.py
 ```
 
-The tool communicates with the backend API and requires valid admin credentials.
+---
 
+## Server Setup
+1. Install requirements:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Environment variables:
+   - `MONGO_URI` – MongoDB connection URI
+   - `MONGO_DB_NAME` – database name (default `FireGuard`)
+   - `SECRET_KEY` – Flask secret for JWTs
+   - `ADMIN_PASS` – initial admin password
+   - `LATEST_VERSION` – current client version tag
+   - `LATEST_BINARY` – path to the latest `.exe` to serve via `/release`
+3. Start locally with:
+   ```bash
+   python server.py
+   ```
+   or in production:
+   ```bash
+   gunicorn server:app
+   ```
 
-### Backend API Deployment
+A minimal configuration for Render is provided in `render.yaml`.
 
-A simple Flask API implementation is provided in `server.py`. You can deploy it to [Render](https://render.com) using the included `render.yaml` configuration:
+---
 
-```bash
-pip install -r requirements.txt
-python server.py  # local testing
-```
-On Render, create a new Web Service from this repo and it will automatically use `gunicorn server:app` to start the API.
+## Developer Tool (EXD)
+Run `python exd.py` to launch the admin toolkit. After logging in you can:
+- View registered clients and their HWIDs
+- Push a new client version
+- Toggle bans or remove users
+- Browse logs in real time
 
-Key admin endpoints include:
+---
 
-- `GET /api/clients` – list all registered users
-- `POST /api/remove_user` – delete a user account
-- `POST /api/set_version` – update the latest client version
-- `GET /api/logs` – fetch logs (optionally by `hwid`)
-- `POST /api/set_banned` – ban or unban a client
-- `POST /api/ban` – ban with reason
-- `POST /api/unban` – remove a ban
-- `POST /api/unlink_hwid` – reset a user's HWID
-- `POST /api/security/kill_switch` – force shutdown on a client
-- `POST /api/security/flag_hwid` – mark hardware ID as suspicious
-- `GET /api/activity_log` – view admin activity history
-- `GET /api/version_history` – list all versions
-- `GET /api/download_update` – download the latest binary
-- `POST /api/change_password` – user changes their password
-- `GET /api/me` – current user info
-- `POST /api/logout` – logout current token
-- `POST /api/reset_password_request` – create password reset token
-- `POST /api/reset_password` – complete password reset
-- `POST /api/refresh_token` – issue new JWT
-- `GET /api/stats` – basic usage stats
-- `POST /api/inbox/send` – send a message to a user
-- `GET /api/inbox` – list inbox messages
-- `POST /api/inbox/read/<id>` – mark message read
-- `GET /api/violations` – list logged violations
-- `GET /api/logs/errors` – only error logs
-- `POST /api/analyze_file` – upload a file for scoring
-- `GET /api/get_threat_score/<md5>` – query score by hash
-- `POST /api/submit_feedback` – user submits feedback
-- Visit `/admin` in a browser to access a simple dashboard showing endpoint health and user count (login with your EXD credentials).
+## Admin Dashboard
+The backend exposes `/admin` – a simple page listing API routes with a green/red status indicator and the total user count. Use your EXD credentials to log in.
+
+---
+
+## API Overview
+| Route | Description |
+| ----- | ----------- |
+| `POST /api/register` | create a new account |
+| `POST /api/login` | authenticate user |
+| `GET /api/me` | return current account info |
+| `POST /api/change_password` | change logged in user's password |
+| `POST /api/logout` | invalidate token (optional) |
+| `POST /api/reset_password_request` | start a password reset |
+| `POST /api/reset_password` | complete password reset |
+| `POST /api/refresh_token` | renew JWT |
+| `GET /api/check_update` | get latest client version |
+| `POST /api/set_version` | set latest version (admin) |
+| `GET /api/download_update` | download newest binary |
+| `GET /release` | direct binary download |
+| `GET /api/version_history` | list previous versions |
+| `GET /api/clients` | list all users (admin) |
+| `POST /api/remove_user` | delete an account |
+| `POST /api/ban` | ban a user or HWID |
+| `POST /api/unban` | remove a ban |
+| `POST /api/set_banned` | toggle ban status |
+| `POST /api/unlink_hwid` | reset user's HWID |
+| `POST /api/security/kill_switch` | force shutdown on a client |
+| `POST /api/security/flag_hwid` | mark HWID as suspicious |
+| `GET /api/activity_log` | admin activity history |
+| `GET /api/logs` | fetch logs (optionally by HWID) |
+| `GET /api/logs/errors` | fetch only error logs |
+| `GET /api/stats` | system statistics |
+| `GET /api/violations` | list reported violations |
+| `POST /api/inbox/send` | send message to user |
+| `GET /api/inbox` | list inbox messages |
+| `POST /api/inbox/read/<id>` | mark message as read |
+| `POST /api/analyze_file` | upload file for scoring |
+| `GET /api/get_threat_score/<md5>` | query score by hash |
+| `POST /api/submit_feedback` | submit false‑positive feedback |
+
+Every endpoint requires a `Bearer` token header except `/admin` and the registration/login routes.
+
+---
+
+FireGuard is a work in progress and should not be trusted as a full security solution. Use it for educational purposes only.
