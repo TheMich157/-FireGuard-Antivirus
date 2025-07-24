@@ -1,4 +1,5 @@
 # Developer tool for FireGuard - EXD
+# Licensed under the MIT License. See LICENSE for details.
 import os
 import tkinter as tk
 import ttkbootstrap as ttkb

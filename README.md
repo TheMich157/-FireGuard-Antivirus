@@ -76,10 +76,16 @@ Run `python exd.py` to launch the admin toolkit. After logging in you can:
 - Toggle bans or remove users
 - Browse logs in real time
 
+EXD is distributed under the same MIT License as the rest of FireGuard. You may
+share the compiled `exd.exe` freely as long as the license file is included.
+
 ---
 
 ## Admin Dashboard
 The backend exposes `/admin` – a simple page listing API routes with a green/red status indicator and the total user count. Use your EXD credentials to log in.
+
+### Built-in API docs
+Browse `/docs` on the server to view friendly pages for each API endpoint. Every page links to the real route so you can test requests directly.
 
 ---
 
@@ -124,3 +130,6 @@ Every endpoint requires a `Bearer` token header except `/admin` and the registra
 ---
 
 FireGuard is a work in progress and should not be trusted as a full security solution. Use it for educational purposes only.
+
+## License
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.

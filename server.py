@@ -21,6 +21,53 @@ import threading
 import time
 import requests
 
+# Simple CSS style used by rendered pages
+STYLE = """
+<style>
+body {font-family: Arial, sans-serif; background:#f0f2f5; margin:40px; color:#333;}
+h1, h2 {color:#d9534f;}
+table {border-collapse: collapse; width:100%;}
+th, td {padding:8px 12px; border:1px solid #ccc;}
+a {color:#0275d8; text-decoration:none;}
+</style>
+"""
+
+# Basic info for the API documentation pages
+API_DOCS = {
+    '/api/register': ('POST', 'create a new account'),
+    '/api/login': ('POST', 'authenticate user'),
+    '/api/me': ('GET', 'return current account info'),
+    '/api/change_password': ('POST', "change logged in user's password"),
+    '/api/logout': ('POST', 'invalidate token'),
+    '/api/reset_password_request': ('POST', 'start a password reset'),
+    '/api/reset_password': ('POST', 'complete password reset'),
+    '/api/refresh_token': ('POST', 'renew JWT'),
+    '/api/check_update': ('GET', 'get latest client version'),
+    '/api/set_version': ('POST', 'set latest version (admin)'),
+    '/api/download_update': ('GET', 'download newest binary'),
+    '/release': ('GET', 'direct binary download'),
+    '/api/version_history': ('GET', 'list previous versions'),
+    '/api/clients': ('GET', 'list all users (admin)'),
+    '/api/remove_user': ('POST', 'delete an account'),
+    '/api/ban': ('POST', 'ban a user or HWID'),
+    '/api/unban': ('POST', 'remove a ban'),
+    '/api/set_banned': ('POST', 'toggle ban status'),
+    '/api/unlink_hwid': ('POST', "reset user's HWID"),
+    '/api/security/kill_switch': ('POST', 'force shutdown on a client'),
+    '/api/security/flag_hwid': ('POST', 'mark HWID as suspicious'),
+    '/api/activity_log': ('GET', 'admin activity history'),
+    '/api/logs': ('GET', 'fetch logs'),
+    '/api/logs/errors': ('GET', 'fetch only error logs'),
+    '/api/stats': ('GET', 'system statistics'),
+    '/api/violations': ('GET', 'list reported violations'),
+    '/api/inbox/send': ('POST', 'send message to user'),
+    '/api/inbox': ('GET', 'list inbox messages'),
+    '/api/inbox/read/<id>': ('POST', 'mark message as read'),
+    '/api/analyze_file': ('POST', 'upload file for scoring'),
+    '/api/get_threat_score/<md5>': ('GET', 'query score by hash'),
+    '/api/submit_feedback': ('POST', 'submit false-positive feedback'),
+}
+
 
 # Flask app setup
 app = Flask(__name__)
@@ -172,11 +219,11 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         error = 'Invalid credentials'
     return render_template_string(
-        '''<form method="post">
+        STYLE + '''<form method="post" style="max-width:300px;margin:auto;">
             <h2>Admin Login</h2>
             <p style="color:red;">{{error}}</p>
-            <input name="username" placeholder="Username">
-            <input name="password" type="password" placeholder="Password">
+            <input name="username" placeholder="Username" style="width:100%;margin-bottom:10px;">
+            <input name="password" type="password" placeholder="Password" style="width:100%;margin-bottom:10px;">
             <button type="submit">Login</button>
         </form>''',
         error=error,
@@ -192,13 +239,41 @@ def admin_logout():
 def home_page():
     """Simple landing page for the API service."""
     return render_template_string(
-        """
+        STYLE + """
         <h1>FireGuard Antivirus</h1>
         <p>Welcome to the FireGuard API server.</p>
         <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
+        <p>API reference: <a href='/docs'>/docs</a></p>
         <p>Project homepage: <a href='https://fireguard-antivirus.onrender.com/'>https://fireguard-antivirus.onrender.com</a></p>
         """
     )
+
+
+@app.route('/docs')
+def docs_index():
+    """List available API endpoints."""
+    items = []
+    for path, (method, desc) in sorted(API_DOCS.items()):
+        items.append(f"<li><a href='/docs{path}'>{method} {path}</a> - {desc}</li>")
+    return render_template_string(STYLE + "<h2>API Documentation</h2><ul>" + ''.join(items) + "</ul>")
+
+
+@app.route('/docs/api/<path:path>')
+def docs_api_redirect(path):
+    """Direct redirect to the raw API endpoint."""
+    return redirect(f'/api/{path}')
+
+
+@app.route('/docs/<path:path>')
+def docs_page(path):
+    """Render a simple documentation page for the given endpoint."""
+    endpoint = '/' + path if not path.startswith('/') else path
+    info = API_DOCS.get(endpoint)
+    if not info:
+        return redirect(f'/api/{path}')
+    method, desc = info
+    html = f"<h2>{method} {endpoint}</h2><p>{desc}</p><p><a href='{endpoint}'>Go to endpoint</a></p>"
+    return render_template_string(STYLE + html)
 
 @app.route('/admin/api/<path:path>')
 @admin_login_required
@@ -240,9 +315,9 @@ def admin_dashboard():
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
     return render_template_string(
-        f'''<h2>Server Status</h2>
+        STYLE + f'''<h2>Server Status</h2>
             <p>Registered users: {users_count}</p>
-            <table border="1" cellpadding="5">{rows}</table>
+            <table>{rows}</table>
             <a href="{{{{ url_for('admin_logout') }}}}">Logout</a>'''
     )
 
