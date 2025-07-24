@@ -31,7 +31,41 @@ th, td {padding:8px 12px; border:1px solid #ccc;}
 a {color:#0275d8; text-decoration:none;}
 </style>
 """
-
+# Basic info for the API documentation pages
+API_DOCS = {
+    '/api/register': ('POST', 'create a new account'),
+    '/api/login': ('POST', 'authenticate user'),
+    '/api/me': ('GET', 'return current account info'),
+    '/api/change_password': ('POST', "change logged in user's password"),
+    '/api/logout': ('POST', 'invalidate token'),
+    '/api/reset_password_request': ('POST', 'start a password reset'),
+    '/api/reset_password': ('POST', 'complete password reset'),
+    '/api/refresh_token': ('POST', 'renew JWT'),
+    '/api/check_update': ('GET', 'get latest client version'),
+    '/api/set_version': ('POST', 'set latest version (admin)'),
+    '/api/download_update': ('GET', 'download newest binary'),
+    '/release': ('GET', 'direct binary download'),
+    '/api/version_history': ('GET', 'list previous versions'),
+    '/api/clients': ('GET', 'list all users (admin)'),
+    '/api/remove_user': ('POST', 'delete an account'),
+    '/api/ban': ('POST', 'ban a user or HWID'),
+    '/api/unban': ('POST', 'remove a ban'),
+    '/api/set_banned': ('POST', 'toggle ban status'),
+    '/api/unlink_hwid': ('POST', "reset user's HWID"),
+    '/api/security/kill_switch': ('POST', 'force shutdown on a client'),
+    '/api/security/flag_hwid': ('POST', 'mark HWID as suspicious'),
+    '/api/activity_log': ('GET', 'admin activity history'),
+    '/api/logs': ('GET', 'fetch logs'),
+    '/api/logs/errors': ('GET', 'fetch only error logs'),
+    '/api/stats': ('GET', 'system statistics'),
+    '/api/violations': ('GET', 'list reported violations'),
+    '/api/inbox/send': ('POST', 'send message to user'),
+    '/api/inbox': ('GET', 'list inbox messages'),
+    '/api/inbox/read/<id>': ('POST', 'mark message as read'),
+    '/api/analyze_file': ('POST', 'upload file for scoring'),
+    '/api/get_threat_score/<md5>': ('GET', 'query score by hash'),
+    '/api/submit_feedback': ('POST', 'submit false-positive feedback'),
+}
 
 # Flask app setup
 app = Flask(__name__)
@@ -216,16 +250,28 @@ def home_page():
 @app.route('/docs')
 def docs_index():
     """List available API endpoints."""
-    routes = sorted(r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/api/'))
-    links = ''.join(f"<li><a href='/docs{p}'>{p}</a></li>" for p in routes)
-    return render_template_string(STYLE + f"<h2>API Documentation</h2><ul>{links}</ul>")
+    items = []
+    for path, (method, desc) in sorted(API_DOCS.items()):
+        items.append(f"<li><a href='/docs{path}'>{method} {path}</a> - {desc}</li>")
+    return render_template_string(STYLE + "<h2>API Documentation</h2><ul>" + ''.join(items) + "</ul>")
 
 
 @app.route('/docs/api/<path:path>')
-@app.route('/docs/<path:path>')
-def docs_redirect(path):
-    """Redirect /docs/<endpoint> to the actual API endpoint."""
+def docs_api_redirect(path):
+    """Direct redirect to the raw API endpoint."""
     return redirect(f'/api/{path}')
+
+
+@app.route('/docs/<path:path>')
+def docs_page(path):
+    """Render a simple documentation page for the given endpoint."""
+    endpoint = '/' + path if not path.startswith('/') else path
+    info = API_DOCS.get(endpoint)
+    if not info:
+        return redirect(f'/api/{path}')
+    method, desc = info
+    html = f"<h2>{method} {endpoint}</h2><p>{desc}</p><p><a href='{endpoint}'>Go to endpoint</a></p>"
+    return render_template_string(STYLE + html)
 
 @app.route('/admin/api/<path:path>')
 @admin_login_required
