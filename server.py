@@ -1,4 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    session,
+    redirect,
+    url_for,
+    render_template_string,
+)
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
@@ -73,6 +81,73 @@ def auth_required(f):
             return jsonify({'error': 'Invalid token'}), 401
         return f(*args, **kwargs)
     return decorated
+
+
+def admin_login_required(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not session.get('admin'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+
+    return wrapped
+
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = ''
+    if request.method == 'POST':
+        user = users.find_one({'username': request.form.get('username')})
+        if (
+            user
+            and check_password_hash(user['password'], request.form.get('password', ''))
+            and user.get('role') == 'admin'
+        ):
+            session['admin'] = str(user['_id'])
+            return redirect(url_for('admin_dashboard'))
+        error = 'Invalid credentials'
+    return render_template_string(
+        '''<form method="post">
+            <h2>Admin Login</h2>
+            <p style="color:red;">{{error}}</p>
+            <input name="username" placeholder="Username">
+            <input name="password" type="password" placeholder="Password">
+            <button type="submit">Login</button>
+        </form>''',
+        error=error,
+    )
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin', None)
+    return redirect(url_for('admin_login'))
+
+
+@app.route('/admin')
+@admin_login_required
+def admin_dashboard():
+    api_routes = sorted(
+        r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/api/')
+    )
+    statuses = []
+    with app.test_client() as c:
+        for rt in api_routes:
+            resp = c.open(rt, method='GET')
+            status = 'Online' if resp.status_code < 500 else 'Offline'
+            statuses.append(status)
+    users_count = users.count_documents({})
+    rows = ''.join(
+        f'<tr><td>{p}</td><td style="color:{"green" if s=="Online" else "red"}">'
+        f'{s}</td></tr>'
+        for p, s in zip(api_routes, statuses)
+    )
+    return render_template_string(
+        f'''<h2>Server Status</h2>
+            <p>Registered users: {users_count}</p>
+            <table border="1" cellpadding="5">{rows}</table>
+            <a href="{{{{ url_for('admin_logout') }}}}">Logout</a>'''
+    )
 
 
 @app.post('/api/register')
