@@ -128,9 +128,10 @@ def register_user(username: str, password: str) -> bool:
 def login_user(username: str, password: str) -> bool:
     r = api_post("/api/login", {"username": username, "password": password})
     if isinstance(r, requests.Response) and r.ok:
-        tok = r.json().get("token")
+        data = r.json()
+        tok = data.get("token")
         if tok:
-            save_token(tok, username)
+            save_token(tok, username, data.get("license"))
             return True
     return False
 
@@ -584,16 +585,24 @@ class FireGuardApp:
         def do_login():
             if login_user(user_var.get(), pass_var.get()):
                 dialog.destroy()
+                if LICENSE_KEY:
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(LICENSE_KEY)
+                    messagebox.showinfo("License", f"Your license: {LICENSE_KEY}\n(Copied to clipboard)")
                 self.check_license()
             else:
                 messagebox.showerror("Login", "Failed to login")
 
         def do_register():
             if register_user(user_var.get(), pass_var.get()):
+                if LICENSE_KEY:
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(LICENSE_KEY)
                 messagebox.showinfo("Register", f"Account created. License: {LICENSE_KEY}")
                 dialog.destroy()
             else:
                 messagebox.showerror("Register", "Registration failed")
+
 
         ttk.Button(dialog, text="Login", command=do_login).grid(row=2, column=0, pady=10)
         ttk.Button(dialog, text="Register", command=do_register).grid(row=2, column=1)

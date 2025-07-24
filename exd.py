@@ -332,3 +332,13 @@ class EXDApp:
 
 if __name__ == "__main__":
     EXDApp()
+# This code is part of the EXD Developer Tool for FireGuard Antivirus.
+# It provides a GUI for managing clients, logs, licenses, and updates.
+# The tool allows administrators to log in, view client information, fetch logs,
+# push updates, toggle bans, and manage licenses.
+# The API_URL is set via environment variable or defaults to a public endpoint.
+# The application uses ttkbootstrap for a modern look and feel.
+# The main class EXDApp handles the UI and interactions with the API.
+# The application is designed to be user-friendly and efficient for managing antivirus clients.
+# The code is structured to allow easy expansion and modification for future features.
+# The application is intended for use by administrators of the FireGuard Antivirus system.
