@@ -40,7 +40,10 @@ VERSION = "0.1.0"
 GITHUB_REPO = "TheMich157/-FireGuard-Antivirus"
 LOG_PATH = "fireguard.log"
 THREAT_THRESHOLD = 3
-API_URL = "https://fireguard-antivirus.onrender.com"  # TODO: replace with real backend URL
+API_URL = "https://example.com"  # TODO: replace with real backend URL
+LICENSE_FILE = "license.json"
+TOKEN = None
+USERNAME = None
 
 def get_hwid() -> str:
     """Return a simple hardware ID based on MAC address."""
@@ -52,16 +55,77 @@ def get_hwid() -> str:
 
 HWID = get_hwid()
 
+
+def load_token():
+    global TOKEN, USERNAME
+    try:
+        with open(LICENSE_FILE, "r", encoding="utf-8") as f:
+           data = json.load(f)
+           TOKEN = data.get("token")
+           USERNAME = data.get("username")
+    except FileNotFoundError:
+     TOKEN = None
+     USERNAME = None
+
+def save_token(token: str, username: str):
+    global TOKEN, USERNAME
+    TOKEN = token
+    USERNAME = username
+    try:
+        with open(LICENSE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"token": token, "username": username}, f)
+    except Exception:
+        pass
+
+def logout_user():
+    """Clear stored token."""
+    global TOKEN, USERNAME
+    TOKEN = None
+    USERNAME = None
+    try:
+        if os.path.exists(LICENSE_FILE):
+            os.remove(LICENSE_FILE)
+    except Exception:
+        pass
+
+def register_user(username: str, password: str) -> bool:
+    r = api_post("/api/register", {"username": username, "password": password, "hwid": HWID})
+    if isinstance(r, requests.Response) and r.ok:
+        tok = r.json().get("token")
+        if tok:
+            save_token(tok, username)
+            return True
+    return False
+
+def login_user(username: str, password: str) -> bool:
+    r = api_post("/api/login", {"username": username, "password": password})
+    if isinstance(r, requests.Response) and r.ok:
+        tok = r.json().get("token")
+        if tok:
+            save_token(tok, username)
+            return True
+    return False
+
 def api_post(endpoint: str, data: dict):
     """Helper to POST JSON data to the backend API."""
+    headers = {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
     try:
-        return requests.post(f"{API_URL}{endpoint}", json=data, timeout=5)
+        return requests.post(
+            f"{API_URL}{endpoint}", json=data, headers=headers, timeout=5
+        )
     except Exception:
         return None
 
 def api_get(endpoint: str, params: dict | None = None):
+    headers = {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
     try:
-        return requests.get(f"{API_URL}{endpoint}", params=params, timeout=5)
+        return requests.get(
+            f"{API_URL}{endpoint}", params=params, headers=headers, timeout=5
+        )
     except Exception:
         return None
 
@@ -400,9 +464,11 @@ class FireGuardApp:
         self.notebook = ttk.Notebook(self.root)
         self.scan_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
+        self.profile_tab = ttk.Frame(self.notebook)
         self.notebook.pack(fill="both", expand=True)
         self.notebook.add(self.scan_tab, text=LANGUAGES[self.lang]['scan_tab'])
         self.notebook.add(self.settings_tab, text=LANGUAGES[self.lang]['settings_tab'])
+        self.notebook.add(self.profile_tab, text="Account")
 
         self.text = ScrolledText(self.scan_tab, wrap="word", bg="black", fg="lime", insertbackground="lime")
         self.text.pack(fill="both", expand=True)
@@ -470,6 +536,11 @@ class FireGuardApp:
         self.btn_open_quarantine = ttk.Button(self.toolbar, command=self.open_quarantine)
         self.btn_open_quarantine.pack(side="right")
 
+        # account tab
+        self.account_label = ttk.Label(self.profile_tab, text="")
+        self.account_label.pack(pady=10)
+        ttk.Button(self.profile_tab, text="Logout", command=self.logout_action).pack()
+
         self.apply_language()
 
         self.monitoring = False
@@ -477,6 +548,52 @@ class FireGuardApp:
         self.stop_event = threading.Event()
         patterns.update(load_patterns_from_file())
         self.log_imports()
+        self.update_account_label()
+
+    def authenticate(self):
+        load_token()
+        if TOKEN:
+            self.update_account_label()
+            return
+        dialog = tk.Toplevel(self.root)
+        dialog.title("FireGuard Login")
+        ttk.Label(dialog, text="Username").grid(row=0, column=0, pady=5, sticky=tk.W)
+        user_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=user_var, width=30).grid(row=0, column=1)
+        ttk.Label(dialog, text="Password").grid(row=1, column=0, pady=5, sticky=tk.W)
+        pass_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=pass_var, show="*", width=30).grid(row=1, column=1)
+
+        def do_login():
+            if login_user(user_var.get(), pass_var.get()):
+                dialog.destroy()
+            else:
+                messagebox.showerror("Login", "Failed to login")
+
+        def do_register():
+            if register_user(user_var.get(), pass_var.get()):
+                messagebox.showinfo("Register", "Account created")
+                dialog.destroy()
+            else:
+                messagebox.showerror("Register", "Registration failed")
+
+        ttk.Button(dialog, text="Login", command=do_login).grid(row=2, column=0, pady=10)
+        ttk.Button(dialog, text="Register", command=do_register).grid(row=2, column=1)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        self.root.wait_window(dialog)
+        self.update_account_label()
+
+    def logout_action(self):
+        if messagebox.askyesno("Logout", "Sign out from this device?"):
+            logout_user()
+            self.authenticate()
+
+    def update_account_label(self):
+        if USERNAME:
+            self.account_label.config(text=f"Logged in as {USERNAME}")
+        else:
+            self.account_label.config(text="Not logged in")
 
     def run_in_thread(self, func, *args):
         def wrapper():
@@ -510,10 +627,12 @@ class FireGuardApp:
         self.theme = THEMES.get(choice, 'flatly')
         self.style.theme_use(self.theme)
 
+
     def apply_language(self):
         t = LANGUAGES[self.lang]
         self.notebook.tab(0, text=t['scan_tab'])
         self.notebook.tab(1, text=t['settings_tab'])
+        self.notebook.tab(2, text='Account')
         self.save_patterns_btn.config(text=t['save_patterns'])
         self.lbl_language.config(text=t['language'])
         self.lbl_theme.config(text=t['theme'])
@@ -590,7 +709,7 @@ class FireGuardApp:
             if os.name == 'nt':
                 os.startfile(qdir)
             else:
-                subprocess.Popen(['xdg-open', qdir])
+              subprocess.Popen(['xdg-open', qdir])
         except Exception:
             messagebox.showinfo('Quarantine', qdir)
             send_error_log('open_quarantine_failed')
