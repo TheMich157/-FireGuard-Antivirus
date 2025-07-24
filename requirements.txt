@@ -5,8 +5,8 @@ plyer
 ttkbootstrap
 requests
 packaging
+gunicorn 
 flask
 pymongo
 pyjwt
 werkzeug
-gunicorn 
