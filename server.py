@@ -20,6 +20,7 @@ from functools import wraps
 import threading
 import time
 import requests
+import uuid
 
 # Simple CSS style used by rendered pages
 STYLE = """
@@ -82,8 +83,12 @@ API_DOCS = {
     '/api/remove_user': ('POST', 'delete an account'),
     '/api/ban': ('POST', 'ban a user or HWID'),
     '/api/unban': ('POST', 'remove a ban'),
+    '/api/ban_hwid': ('POST', 'ban by HWID'),
     '/api/set_banned': ('POST', 'toggle ban status'),
     '/api/unlink_hwid': ('POST', "reset user's HWID"),
+    '/api/add_license': ('POST', 'assign license key'),
+    '/api/remove_license': ('POST', 'delete license'),
+    '/api/license_check': ('POST', 'verify license key'),
     '/api/security/kill_switch': ('POST', 'force shutdown on a client'),
     '/api/security/flag_hwid': ('POST', 'mark HWID as suspicious'),
     '/api/activity_log': ('GET', 'admin activity history'),
@@ -403,11 +408,18 @@ def register():
     if users.find_one({'username': data['username']}):
         return jsonify({'error': 'exists'}), 400
     hashed = generate_password_hash(data['password'])
-    user = {'username': data['username'], 'password': hashed, 'hwid': data.get('hwid'), 'banned': False}
+    license_key = uuid.uuid4().hex
+    user = {
+        'username': data['username'],
+        'password': hashed,
+        'hwid': data.get('hwid'),
+        'banned': False,
+        'license': license_key,
+    }
     res = users.insert_one(user)
     log_activity(res.inserted_id, 'register', data.get('username'))
     token = generate_token(res.inserted_id)
-    return jsonify({'token': token})
+    return jsonify({'token': token, 'license': license_key})
 
 
 @app.post('/api/login')
@@ -634,6 +646,62 @@ def unban_user():
     users.update_one(query, {'$set': {'banned': False}, '$unset': {'ban_reason': ''}})
     log_activity(request.user_id, 'unban', query)
     return jsonify({'status': 'ok'})
+
+
+@app.post('/api/ban_hwid')
+@auth_required
+def ban_hwid():
+    data = request.get_json() or {}
+    hwid = data.get('hwid')
+    if not hwid:
+        return jsonify({'error': 'missing hwid'}), 400
+    users.update_one({'hwid': hwid}, {'$set': {'banned': True, 'ban_reason': data.get('reason', 'banned')}})
+    log_activity(request.user_id, 'ban_hwid', hwid)
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/add_license')
+@auth_required
+def add_license():
+    data = request.get_json() or {}
+    username = data.get('username')
+    license_key = data.get('license') or uuid.uuid4().hex
+    if not username:
+        return jsonify({'error': 'missing username'}), 400
+    res = users.update_one({'username': username}, {'$set': {'license': license_key}})
+    if res.matched_count == 0:
+        return jsonify({'error': 'not found'}), 404
+    log_activity(request.user_id, 'add_license', username)
+    return jsonify({'license': license_key})
+
+
+@app.post('/api/remove_license')
+@auth_required
+def remove_license():
+    data = request.get_json() or {}
+    username = data.get('username')
+    if not username:
+        return jsonify({'error': 'missing username'}), 400
+    res = users.update_one({'username': username}, {'$unset': {'license': ''}})
+    if res.matched_count == 0:
+        return jsonify({'error': 'not found'}), 404
+    log_activity(request.user_id, 'remove_license', username)
+    return jsonify({'status': 'ok'})
+
+
+@app.post('/api/license_check')
+@auth_required
+def license_check_api():
+    data = request.get_json() or {}
+    username = data.get('username')
+    license_key = data.get('license')
+    if not username or not license_key:
+        return jsonify({'error': 'missing fields'}), 400
+    user = users.find_one({'username': username})
+    if not user:
+        return jsonify({'valid': False}), 404
+    valid = license_key == user.get('license')
+    return jsonify({'valid': valid, 'banned': user.get('banned', False)})
 
 
 @app.post('/api/unlink_hwid')

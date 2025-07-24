@@ -2,7 +2,7 @@ import os
 import shutil
 import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttkb
 from ttkbootstrap import ttk
@@ -44,6 +44,7 @@ API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 LICENSE_FILE = "license.json"
 TOKEN = None
 USERNAME = None
+LICENSE_KEY = None
 
 def get_hwid() -> str:
     """Return a simple hardware ID based on MAC address."""
@@ -57,31 +58,39 @@ HWID = get_hwid()
 
 
 def load_token():
-    global TOKEN, USERNAME
+    global TOKEN, USERNAME, LICENSE_KEY
     try:
         with open(LICENSE_FILE, "r", encoding="utf-8") as f:
            data = json.load(f)
            TOKEN = data.get("token")
            USERNAME = data.get("username")
+           LICENSE_KEY = data.get("license")
     except FileNotFoundError:
      TOKEN = None
      USERNAME = None
+     LICENSE_KEY = None
 
-def save_token(token: str, username: str):
-    global TOKEN, USERNAME
+def save_token(token: str, username: str, license_key: str | None = None):
+    global TOKEN, USERNAME, LICENSE_KEY
     TOKEN = token
     USERNAME = username
+    if license_key is not None:
+        LICENSE_KEY = license_key
+    data = {"token": token, "username": username}
+    if LICENSE_KEY:
+        data["license"] = LICENSE_KEY
     try:
         with open(LICENSE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"token": token, "username": username}, f)
+            json.dump(data, f)
     except Exception:
         pass
 
 def logout_user():
     """Clear stored token."""
-    global TOKEN, USERNAME
+    global TOKEN, USERNAME, LICENSE_KEY
     TOKEN = None
     USERNAME = None
+    LICENSE_KEY = None
     try:
         if os.path.exists(LICENSE_FILE):
             os.remove(LICENSE_FILE)
@@ -91,9 +100,10 @@ def logout_user():
 def register_user(username: str, password: str) -> bool:
     r = api_post("/api/register", {"username": username, "password": password, "hwid": HWID})
     if isinstance(r, requests.Response) and r.ok:
-        tok = r.json().get("token")
+        data = r.json()
+        tok = data.get("token")
         if tok:
-            save_token(tok, username)
+            save_token(tok, username, data.get("license"))
             return True
     return False
 
@@ -554,12 +564,13 @@ class FireGuardApp:
         def do_login():
             if login_user(user_var.get(), pass_var.get()):
                 dialog.destroy()
+                self.check_license()
             else:
                 messagebox.showerror("Login", "Failed to login")
 
         def do_register():
             if register_user(user_var.get(), pass_var.get()):
-                messagebox.showinfo("Register", "Account created")
+                messagebox.showinfo("Register", f"Account created. License: {LICENSE_KEY}")
                 dialog.destroy()
             else:
                 messagebox.showerror("Register", "Registration failed")
@@ -851,19 +862,29 @@ class FireGuardApp:
             self.authenticate()
         if not TOKEN:
             messagebox.showerror("FireGuard", "You must be logged in to use this feature.")
-            return
-        r = api_get("/api/check_license", {"hwid": HWID})
+            return False
+        global LICENSE_KEY
+        if not LICENSE_KEY:
+            key = simpledialog.askstring("License", "Enter your license key:")
+            if not key:
+                return False
+            LICENSE_KEY = key
+        r = api_post("/api/license_check", {"username": USERNAME, "license": LICENSE_KEY})
         if r is None or not r.ok:
             messagebox.showerror("FireGuard", "License check failed. Please try again later.")
-            return
+            return False
         data = r.json()
         if data.get("valid"):
             messagebox.showinfo("FireGuard", "Your license is valid.")
+            save_token(TOKEN, USERNAME, LICENSE_KEY)
         else:
             messagebox.showwarning("FireGuard", "Your license is invalid or expired.")
+            LICENSE_KEY = None
+            return False
         if data.get("banned"):
             reason = data.get("reason") or "User banned"
             kill_switch(reason)
+        return True
 
 if __name__ == '__main__':
  app = FireGuardApp(ttkb.Window())
