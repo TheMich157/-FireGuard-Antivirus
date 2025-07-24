@@ -95,6 +95,12 @@ pyinstaller --onefile --noconsole fireguard.py
 
 The compiled `fireguard.exe` automatically checks GitHub releases on startup and prompts to download a newer version if available.
 
+### Account Login
+
+FireGuard now requires users to create a free account. On first launch you will
+be prompted to register or log in. After successful authentication a license
+token is stored locally and used for all API communication.
+
 ### Developer Tool EXD
 
 The EXD developer tool allows administrators to log in and monitor client activity.

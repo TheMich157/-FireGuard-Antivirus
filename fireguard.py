@@ -42,6 +42,9 @@ LOG_PATH = "fireguard.log"
 THREAT_THRESHOLD = 3
 API_URL = "https://example.com"  # TODO: replace with real backend URL
 
+LICENSE_FILE = "license.json"
+TOKEN = None
+
 def get_hwid() -> str:
     """Return a simple hardware ID based on MAC address."""
     try:
@@ -52,16 +55,64 @@ def get_hwid() -> str:
 
 HWID = get_hwid()
 
+def load_token():
+    """Load stored token from disk if present."""
+    global TOKEN
+    try:
+        with open(LICENSE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            TOKEN = data.get("token")
+    except Exception:
+        TOKEN = None
+
+def save_token(token: str):
+    """Persist token for future sessions."""
+    global TOKEN
+    TOKEN = token
+    try:
+        with open(LICENSE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"token": token}, f)
+    except Exception:
+        pass
+
+def register_user(username: str, password: str) -> bool:
+    r = api_post("/api/register", {"username": username, "password": password, "hwid": HWID})
+    if isinstance(r, requests.Response) and r.ok:
+        tok = r.json().get("token")
+        if tok:
+            save_token(tok)
+            return True
+    return False
+
+def login_user(username: str, password: str) -> bool:
+    r = api_post("/api/login", {"username": username, "password": password, "hwid": HWID})
+    if isinstance(r, requests.Response) and r.ok:
+        tok = r.json().get("token")
+        if tok:
+            save_token(tok)
+            return True
+    return False
+
 def api_post(endpoint: str, data: dict):
     """Helper to POST JSON data to the backend API."""
+    headers = {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
     try:
-        return requests.post(f"{API_URL}{endpoint}", json=data, timeout=5)
+        return requests.post(
+            f"{API_URL}{endpoint}", json=data, headers=headers, timeout=5
+        )
     except Exception:
         return None
 
 def api_get(endpoint: str, params: dict | None = None):
+    headers = {}
+    if TOKEN:
+        headers["Authorization"] = f"Bearer {TOKEN}"
     try:
-        return requests.get(f"{API_URL}{endpoint}", params=params, timeout=5)
+        return requests.get(
+            f"{API_URL}{endpoint}", params=params, headers=headers, timeout=5
+        )
     except Exception:
         return None
 
@@ -382,6 +433,7 @@ class FireGuardApp:
         self.lang = 'en'
         self.theme = 'flatly'
         self.style.theme_use(self.theme)
+        self.authenticate()
         check_status()
         verify_integrity()
         FireGuardApp.check_for_updates_gui = check_for_updates_gui
@@ -477,6 +529,38 @@ class FireGuardApp:
         self.stop_event = threading.Event()
         patterns.update(load_patterns_from_file())
         self.log_imports()
+
+    def authenticate(self):
+        load_token()
+        if TOKEN:
+            return
+        dialog = tk.Toplevel(self.root)
+        dialog.title("FireGuard Login")
+        ttk.Label(dialog, text="Username").grid(row=0, column=0, pady=5, sticky=tk.W)
+        user_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=user_var, width=30).grid(row=0, column=1)
+        ttk.Label(dialog, text="Password").grid(row=1, column=0, pady=5, sticky=tk.W)
+        pass_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=pass_var, show="*", width=30).grid(row=1, column=1)
+
+        def do_login():
+            if login_user(user_var.get(), pass_var.get()):
+                dialog.destroy()
+            else:
+                messagebox.showerror("Login", "Failed to login")
+
+        def do_register():
+            if register_user(user_var.get(), pass_var.get()):
+                messagebox.showinfo("Register", "Account created")
+                dialog.destroy()
+            else:
+                messagebox.showerror("Register", "Registration failed")
+
+        ttk.Button(dialog, text="Login", command=do_login).grid(row=2, column=0, pady=10)
+        ttk.Button(dialog, text="Register", command=do_register).grid(row=2, column=1)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        self.root.wait_window(dialog)
 
     def run_in_thread(self, func, *args):
         def wrapper():

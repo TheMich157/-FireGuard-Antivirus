@@ -52,7 +52,10 @@ class EXDApp:
         top = ttk.Frame(self.root, padding=10)
         top.pack(fill=tk.X)
 
+        self.hwid_var = tk.StringVar()
+        ttk.Entry(top, textvariable=self.hwid_var, width=40).pack(side=tk.LEFT, padx=5)
         ttk.Button(top, text="Fetch Logs", command=self.fetch_logs).pack(side=tk.LEFT)
+        ttk.Button(top, text="Check Status", command=self.check_status).pack(side=tk.LEFT, padx=5)
         ttk.Button(top, text="Logout", command=self.create_login_ui).pack(side=tk.RIGHT)
 
         self.log_text = tk.Text(self.root, state=tk.DISABLED)
@@ -61,14 +64,18 @@ class EXDApp:
         self.poll_logs()
 
     def fetch_logs(self):
-        self.load_logs()
+        hwid = self.hwid_var.get().strip()
+        if not hwid:
+            messagebox.showerror("Error", "Enter HWID")
+            return
+        self.load_logs(hwid)
 
-    def load_logs(self):
+    def load_logs(self, hwid: str):
         if not self.token:
             return
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            resp = requests.get(f"{API_URL}/api/logs", headers=headers, timeout=5)
+            resp = requests.get(f"{API_URL}/api/logs/{hwid}", headers=headers, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 self.display_logs("\n".join(data.get("logs", [])))
@@ -77,6 +84,21 @@ class EXDApp:
         except Exception as e:
             self.display_logs(f"Request error: {e}")
 
+    def check_status(self):
+        hwid = self.hwid_var.get().strip()
+        if not hwid or not self.token:
+            return
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            resp = requests.get(f"{API_URL}/api/status", params={"hwid": hwid}, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                messagebox.showinfo("Status", str(data))
+            else:
+                messagebox.showerror("Status", f"Error {resp.status_code}: {resp.text}")
+        except Exception as e:
+            messagebox.showerror("Status", str(e))
+
     def display_logs(self, text):
         self.log_text.configure(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
@@ -84,7 +106,9 @@ class EXDApp:
         self.log_text.configure(state=tk.DISABLED)
 
     def poll_logs(self):
-        self.load_logs()
+        hwid = self.hwid_var.get().strip()
+        if hwid:
+            self.load_logs(hwid)
         self.root.after(5000, self.poll_logs)
 
 if __name__ == "__main__":
