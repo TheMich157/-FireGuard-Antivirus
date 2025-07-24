@@ -5,7 +5,7 @@ from ttkbootstrap import ttk
 import requests
 from tkinter import messagebox
 
-API_URL = "https://example.com"  # TODO: replace with real API endpoint
+API_URL = "https://fireguard-antivirus.onrender.com"  # TODO: replace with real API endpoint
 
 class EXDApp:
     def __init__(self):
