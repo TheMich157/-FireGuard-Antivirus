@@ -11,6 +11,7 @@ API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 class EXDApp:
     def __init__(self):
         self.token = None
+        self.log_job = None
         self.root = ttkb.Window(title="EXD Developer Tool")
         self.create_login_ui()
         self.root.mainloop()
@@ -33,6 +34,9 @@ class EXDApp:
     def clear_root(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+        if self.log_job:
+            self.root.after_cancel(self.log_job)
+            self.log_job = None
 
     def login(self):
         user = self.username_var.get()
@@ -56,6 +60,7 @@ class EXDApp:
         ttk.Button(top, text="Refresh Clients", command=self.load_clients).pack(side=tk.LEFT)
         ttk.Button(top, text="Fetch Logs", command=self.fetch_logs).pack(side=tk.LEFT)
         ttk.Button(top, text="Push Update", command=self.push_update).pack(side=tk.LEFT)
+        ttk.Button(top, text="Toggle Ban", command=self.toggle_ban).pack(side=tk.LEFT)
         ttk.Button(top, text="Remove Client", command=self.remove_client).pack(side=tk.LEFT)
         ttk.Button(top, text="Logout", command=self.create_login_ui).pack(side=tk.RIGHT)
 
@@ -68,6 +73,7 @@ class EXDApp:
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         self.load_clients()
+        self.poll_logs()
 
     def fetch_logs(self):
         item = self.clients_tree.selection()
@@ -98,7 +104,9 @@ class EXDApp:
         self.log_text.delete(1.0, tk.END)
         self.log_text.insert(tk.END, text)
         self.log_text.configure(state=tk.DISABLED)
-
+    def poll_logs(self):
+        self.fetch_logs()
+        self.log_job = self.root.after(5000, self.poll_logs)
     def load_clients(self):
         if not self.token:
             return
@@ -131,6 +139,32 @@ class EXDApp:
             )
             if resp.status_code == 200:
                 messagebox.showinfo("Success", "Version updated")
+            else:
+                messagebox.showerror("Error", resp.text)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def toggle_ban(self):
+        if not self.token:
+            return
+        item = self.clients_tree.selection()
+        if not item:
+            return
+        values = self.clients_tree.item(item[0]).get("values")
+        if not values:
+            return
+        username, hwid, banned = values[0], values[1], values[2]
+        new_status = not banned
+        headers = {"Authorization": f"Bearer {self.token}"}
+        try:
+            resp = requests.post(
+                f"{API_URL}/api/set_banned",
+                headers=headers,
+                json={"username": username, "hwid": hwid, "banned": new_status},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                self.load_clients()
             else:
                 messagebox.showerror("Error", resp.text)
         except Exception as e:
