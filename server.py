@@ -8,9 +8,13 @@ from functools import wraps
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dwdhwuhdkwhudkwdhwudhwuhd')
-MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0/FireGuard')
+MONGO_URI = os.environ.get(
+    'MONGO_URI',
+    'mongodb+srv://admin:admin@cluster0.wp3kmd1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+)
+DB_NAME = os.environ.get('MONGO_DB_NAME', 'FireGuard')
 client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
-db = client.get_default_database()
+db = client[DB_NAME]
 
 users = db['users']
 logs = db['logs']

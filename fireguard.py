@@ -40,7 +40,7 @@ VERSION = "0.1.0"
 GITHUB_REPO = "TheMich157/-FireGuard-Antivirus"
 LOG_PATH = "fireguard.log"
 THREAT_THRESHOLD = 3
-API_URL = "https://example.com"  # TODO: replace with real backend URL
+API_URL = os.environ.get("API_URL", "https://example.com")
 LICENSE_FILE = "license.json"
 TOKEN = None
 USERNAME = None
@@ -414,28 +414,6 @@ def scan_file_behavior(path):
         return ["[✓] Žiadne podozrivé správanie nebolo zistené."]
     except Exception as e:
         return [f"[!] Chyba behaviorálneho skenu: {e}"]
-def check_for_updates_gui(self):
-    try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        data = r.json()
-        latest = data.get("tag_name", "0.0.0").lstrip("v")
-        if version.parse(latest) > version.parse(VERSION):
-            if messagebox.askyesno("Update", f"New version {latest} is available. Download now?"):
-                asset = next((a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")), None)
-                if asset:
-                    dest = os.path.join(os.path.dirname(__file__), asset["name"])
-                    with requests.get(asset["browser_download_url"], stream=True, timeout=10) as dl:
-                        with open(dest, "wb") as f:
-                            for chunk in dl.iter_content(1024 * 1024):
-                                if chunk:
-                                    f.write(chunk)
-                    messagebox.showinfo("Update", f"Downloaded {asset['name']}.\nPlease run it to update FireGuard.")
-        else:
-            messagebox.showinfo("Up to Date", f"You already have the latest version ({VERSION}).")
-    except Exception as e:
-        messagebox.showerror("Update Error", f"Update check failed:\n{e}")
 
 class FireGuardApp:
     def __init__(self, root):
@@ -448,7 +426,6 @@ class FireGuardApp:
         self.style.theme_use(self.theme)
         check_status()
         verify_integrity()
-        FireGuardApp.check_for_updates_gui = check_for_updates_gui
         icon_path = os.path.join(os.path.dirname(__file__), "fireguard_favicon.ico")
         if os.path.exists(icon_path):
             try:
@@ -594,6 +571,36 @@ class FireGuardApp:
             self.account_label.config(text=f"Logged in as {USERNAME}")
         else:
             self.account_label.config(text="Not logged in")
+
+    def check_for_updates_gui(self):
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            r = requests.get(url, timeout=5)
+            r.raise_for_status()
+            data = r.json()
+            latest = data.get("tag_name", "0.0.0").lstrip("v")
+            if version.parse(latest) > version.parse(VERSION):
+                if messagebox.askyesno(
+                    "Update", f"New version {latest} is available. Download now?"
+                ):
+                    asset = next(
+                        (a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")),
+                        None,
+                    )
+                    if asset:
+                        dest = os.path.join(os.path.dirname(__file__), asset["name"])
+                        with requests.get(asset["browser_download_url"], stream=True, timeout=10) as dl:
+                            with open(dest, "wb") as f:
+                                for chunk in dl.iter_content(1024 * 1024):
+                                    if chunk:
+                                        f.write(chunk)
+                        messagebox.showinfo(
+                            "Update", f"Downloaded {asset['name']}.\nPlease run it to update FireGuard."
+                        )
+            else:
+                messagebox.showinfo("Up to Date", f"You already have the latest version ({VERSION}).")
+        except Exception as e:
+            messagebox.showerror("Update Error", f"Update check failed:\n{e}")
 
     def run_in_thread(self, func, *args):
         def wrapper():
