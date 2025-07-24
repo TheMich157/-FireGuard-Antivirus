@@ -239,19 +239,55 @@ def admin_logout():
     session.pop('admin', None)
     return redirect(url_for('admin_login'))
 
+LANDING_PAGE = """
+<!doctype html>
+<html>
+<head>
+    <title>FireGuard Antivirus</title>
+    <style>
+        body {font-family: Arial, sans-serif; background:#f0f2f5; margin:40px;}
+        h1 {color:#d9534f;}
+        input, button {padding:6px;margin-bottom:10px;}
+        #status{margin-bottom:20px;color:#0275d8;}
+    </style>
+</head>
+<body>
+    <h1>FireGuard Antivirus</h1>
+    <p id="status"></p>
+    <div id="forms">
+        <h2>Register</h2>
+        <input id="reg_user" placeholder="Username"><br>
+        <input id="reg_pass" type="password" placeholder="Password"><br>
+        <button onclick="register()">Register</button>
+
+        <h2>Login</h2>
+        <input id="log_user" placeholder="Username"><br>
+        <input id="log_pass" type="password" placeholder="Password"><br>
+        <button onclick="login()">Login</button>
+    </div>
+    <p>API reference: <a href='/docs'>/docs</a></p>
+    <p>Admin: <a href='/admin'>dashboard</a></p>
+<script>
+async function register(){
+    const res = await fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('reg_user').value, password:document.getElementById('reg_pass').value})});
+    const data = await res.json();
+    document.getElementById('status').innerText = data.token ? 'Registered! Token: '+data.token : (data.error||'Error');
+}
+async function login(){
+    const res = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('log_user').value, password:document.getElementById('log_pass').value})});
+    const data = await res.json();
+    document.getElementById('status').innerText = data.token ? 'Logged in! Token: '+data.token : (data.error||'Error');
+}
+</script>
+</body>
+</html>
+"""
+
+
 @app.route('/')
 def home_page():
-    """Simple landing page for the API service."""
-    return render_template_string(
-        STYLE + """
-        <h1>FireGuard Antivirus</h1>
-        <p>Welcome to the FireGuard API server.</p>
-        <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
-        <p>API reference: <a href='/docs'>/docs</a></p>
-        <p>Project homepage: <a href='https://fireguard-antivirus.onrender.com/'>https://fireguard-antivirus.onrender.com</a></p>
-        """
-    )
-
+    """Interactive landing page with register/login forms."""
+    return render_template_string(LANDING_PAGE)
 
 @app.route('/docs')
 def docs_index():
