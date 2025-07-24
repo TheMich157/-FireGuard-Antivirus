@@ -161,69 +161,9 @@ LANGUAGES = {
         'scan_tab': 'Scanning',
         'settings_tab': 'Settings',
         'language': 'Language',
-         'theme': 'Theme',
+        'theme': 'Theme',
         'threads': 'Threads',
         'threshold': 'Threshold'
-    },
-    'sk': {
-        'open_zip': 'Otvoriť ZIP',
-        'scan_file': 'Skenovať súbor',
-        'scan_dir': 'Skenovať priečinok',
-        'stop_scan': 'Zastaviť scan',
-        'behavior_scan': 'Sken správania',
-        'sandbox_test': 'Sandbox test',
-        'monitor': 'Real-Time sledovanie',
-        'clear_log': 'Vyčistiť log',
-        'save_log': 'Uložiť log',
-        'save_patterns': 'Uložiť vzory',
-        'open_quarantine': 'Otvoriť karanténu',
-        'copy_log': 'Kopírovať log',
-        'scan_tab': 'Skenovanie',
-        'settings_tab': 'Nastavenia',
-        'language': 'Jazyk',
-        'theme': 'Téma',
-        'threads': 'Vlákna',
-        'threshold': 'Prah'
-    },
-    'cs': {
-        'open_zip': 'Otevřít ZIP',
-        'scan_file': 'Skenovat soubor',
-        'scan_dir': 'Skenovat složku',
-        'stop_scan': 'Zastavit sken',
-        'behavior_scan': 'Sken chování',
-        'sandbox_test': 'Sandbox test',
-        'monitor': 'Sledování v reálném čase',
-        'clear_log': 'Vymazat log',
-        'save_log': 'Uložit log',
-        'save_patterns': 'Uložit vzory',
-        'open_quarantine': 'Otevřít karanténu',
-        'copy_log': 'Kopírovat log',
-        'scan_tab': 'Skenování',
-        'settings_tab': 'Nastavení',
-        'language': 'Jazyk',
-        'theme': 'Téma',
-        'threads': 'Vlákna',
-        'threshold': 'Prahová hodnota'
-    },
-    'de': {
-        'open_zip': 'ZIP öffnen',
-        'scan_file': 'Datei scannen',
-        'scan_dir': 'Ordner scannen',
-        'stop_scan': 'Scan stoppen',
-        'behavior_scan': 'Verhaltensscan',
-        'sandbox_test': 'Sandbox-Test',
-        'monitor': 'Echtzeitüberwachung',
-        'clear_log': 'Log löschen',
-        'save_log': 'Log speichern',
-        'save_patterns': 'Muster speichern',
-        'open_quarantine': 'Quarantäne öffnen',
-        'copy_log': 'Log kopieren',
-        'scan_tab': 'Scan',
-        'settings_tab': 'Einstellungen',
-        'language': 'Sprache',
-        'theme': 'Thema',
-        'threads': 'Threads',
-        'threshold': 'Schwelle'
     }
 }
 
@@ -292,7 +232,7 @@ def check_7z_installed():
 def extract_zip_7z(zip_path, extract_to):
     exe_path = check_7z_installed()
     if not exe_path:
-        return False, "7z.exe nebol nájdený v systéme."
+        return False, "7z executable not found."
     try:
         result = subprocess.run(
             [exe_path, 'x', f'-o{extract_to}', zip_path, '-y'],
@@ -311,17 +251,19 @@ def analyze_exe_core(path):
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
             for imp in entry.imports:
                 if imp.name:
-                    info.append(f"[EXE] Importuje: {imp.name.decode(errors='ignore')} z {entry.dll.decode(errors='ignore')}")
+                    info.append(
+                        f"[EXE] Imports: {imp.name.decode(errors='ignore')} from {entry.dll.decode(errors='ignore')}"
+                    )
         return info
     except Exception as e:
-        return [f"[!] Nepodarilo sa analyzovať .exe: {e}"]
+        return [f"[!] Failed to analyze .exe: {e}"]
 
 def deep_file_decompile(path):
     try:
         result = subprocess.run(["strings", path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         return result.stdout.splitlines()
     except Exception as e:
-        return [f"[!] Decompilačná chyba: {e}"]
+        return [f"[!] Decompilation error: {e}"]
 
 def calculate_threat_level(content):
     score = 0
@@ -381,9 +323,9 @@ def run_in_real_sandbox(path):
         time.sleep(10)  # sandbox timeout
         if p.poll() is None:
             p.terminate()
-        return f"[Sandbox] Súbor spustený a monitorovaný: {os.path.basename(path)}"
+        return f"[Sandbox] File executed and monitored: {os.path.basename(path)}"
     except Exception as e:
-        return f"[!] Sandbox chyba: {e}"
+        return f"[!] Sandbox error: {e}"
 
 def detect_behavior():
     info = []
@@ -392,7 +334,9 @@ def detect_behavior():
             conns = proc.connections(kind='inet')
             for conn in conns:
                 if conn.status == 'ESTABLISHED' and conn.raddr:
-                    info.append(f"[BEHAVIOR] Proces {proc.info['name']} ({proc.info['pid']}) má spojenie na {conn.raddr.ip}:{conn.raddr.port}")
+                    info.append(
+                        f"[BEHAVIOR] Process {proc.info['name']} ({proc.info['pid']}) connected to {conn.raddr.ip}:{conn.raddr.port}"
+                    )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return info
@@ -416,9 +360,9 @@ def scan_file_behavior(path):
         shutil.rmtree(temp_dir, ignore_errors=True)
         if info:
             return info
-        return ["[✓] Žiadne podozrivé správanie nebolo zistené."]
+        return ["[✓] No suspicious behavior detected."]
     except Exception as e:
-        return [f"[!] Chyba behaviorálneho skenu: {e}"]
+        return [f"[!] Behavior scan error: {e}"]
 
 class FireGuardApp:
     def __init__(self, root):
@@ -476,10 +420,6 @@ class FireGuardApp:
 
         controls = ttk.Frame(self.settings_tab)
         controls.pack(fill="x", pady=5)
-        self.lbl_language = ttk.Label(controls, text=LANGUAGES[self.lang]['language'])
-        self.lbl_language.pack(side="left")
-        self.lang_var = tk.StringVar(value=self.lang)
-        ttk.OptionMenu(controls, self.lang_var, self.lang, *LANGUAGES.keys(), command=self.change_language).pack(side="left", padx=5)
         self.lbl_theme = ttk.Label(controls, text=LANGUAGES[self.lang]['theme'])
         self.lbl_theme.pack(side="left", padx=20)
         self.theme_var = tk.StringVar(value='light')
@@ -583,34 +523,45 @@ class FireGuardApp:
             self.account_label.config(text="Not logged in")
 
     def check_for_updates_gui(self):
-        try:
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-            r = requests.get(url, timeout=5)
-            r.raise_for_status()
-            data = r.json()
-            latest = data.get("tag_name", "0.0.0").lstrip("v")
-            if version.parse(latest) > version.parse(VERSION):
-                if messagebox.askyesno(
-                    "Update", f"New version {latest} is available. Download now?"
-                ):
-                    asset = next(
-                        (a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")),
-                        None,
+        latest = None
+        download_url = None
+        resp = api_get("/api/check_update")
+        if resp is not None and resp.ok:
+            latest = resp.json().get("latest", "0.0.0")
+            download_url = f"{API_URL}/api/download_update"
+        else:
+            try:
+                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+                r = requests.get(url, timeout=5)
+                r.raise_for_status()
+                data = r.json()
+                latest = data.get("tag_name", "0.0.0").lstrip("v")
+                asset = next(
+                    (a for a in data.get("assets", []) if a.get("name", "").endswith(".exe")),
+                    None,
+                )
+                if asset:
+                    download_url = asset["browser_download_url"]
+            except Exception as e:
+                messagebox.showerror("Update Error", f"Update check failed:\n{e}")
+                return
+
+        if latest and version.parse(latest) > version.parse(VERSION) and download_url:
+            if messagebox.askyesno("Update", f"New version {latest} is available. Download now?"):
+                dest = os.path.join(os.path.dirname(__file__), os.path.basename(download_url))
+                try:
+                    with requests.get(download_url, stream=True, timeout=10) as dl:
+                        with open(dest, "wb") as f:
+                            for chunk in dl.iter_content(1024 * 1024):
+                                if chunk:
+                                    f.write(chunk)
+                    messagebox.showinfo(
+                        "Update", f"Downloaded {os.path.basename(dest)}.\nPlease run it to update FireGuard."
                     )
-                    if asset:
-                        dest = os.path.join(os.path.dirname(__file__), asset["name"])
-                        with requests.get(asset["browser_download_url"], stream=True, timeout=10) as dl:
-                            with open(dest, "wb") as f:
-                                for chunk in dl.iter_content(1024 * 1024):
-                                    if chunk:
-                                        f.write(chunk)
-                        messagebox.showinfo(
-                            "Update", f"Downloaded {asset['name']}.\nPlease run it to update FireGuard."
-                        )
-            else:
-                messagebox.showinfo("Up to Date", f"You already have the latest version ({VERSION}).")
-        except Exception as e:
-            messagebox.showerror("Update Error", f"Update check failed:\n{e}")
+                except Exception as e:
+                    messagebox.showerror("Update Error", f"Download failed:\n{e}")
+        else:
+            messagebox.showinfo("Up to Date", f"You already have the latest version ({VERSION}).")
 
     def poll_status(self):
         try:
@@ -640,7 +591,7 @@ class FireGuardApp:
         send_scan_report("log", "info", 0, "") if msg else None
 
     def log_imports(self):
-        self.log("[✓] Načítané moduly:")
+        self.log("[✓] Loaded modules:")
         for name in IMPORTED_MODULES:
             self.log(f"  - {name}")
 
@@ -659,7 +610,6 @@ class FireGuardApp:
         self.notebook.tab(1, text=t['settings_tab'])
         self.notebook.tab(2, text='Account')
         self.save_patterns_btn.config(text=t['save_patterns'])
-        self.lbl_language.config(text=t['language'])
         self.lbl_theme.config(text=t['theme'])
         self.lbl_threads.config(text=t['threads'])
         self.lbl_threshold.config(text=t['threshold'])
@@ -676,7 +626,7 @@ class FireGuardApp:
         self.btn_open_quarantine.config(text='📂 ' + t['open_quarantine'])
 
     def open_zip(self):
-        zip_path = filedialog.askopenfilename(filetypes=[("ZIP súbory", "*.zip")])
+        zip_path = filedialog.askopenfilename(filetypes=[("ZIP files", "*.zip")])
         if not zip_path:
             return
         extract_to = os.path.join(os.getcwd(), "temp_extract")
@@ -684,14 +634,14 @@ class FireGuardApp:
 
         success, output = extract_zip_7z(zip_path, extract_to)
         if success:
-            self.log("[✓] Archív extrahovaný pomocou 7-Zip.")
+            self.log("[✓] Archive extracted using 7-Zip.")
             self.run_in_thread(self.scan_directory, extract_to)
         else:
-            self.log(f"[ERROR] Extrakcia zlyhala: {output}")
+            self.log(f"[ERROR] Extraction failed: {output}")
             send_error_log(output)
 
     def scan_file(self):
-        path = filedialog.askopenfilename(filetypes=[("Súbory", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("All files", "*.*")])
         if path:
             self.run_in_thread(self.scan_directory, path)
 
@@ -714,9 +664,9 @@ class FireGuardApp:
             patterns.clear()
             patterns.update(data)
             save_patterns_to_file(patterns)
-            messagebox.showinfo("Vzory", "Vzory uložené.")
+            messagebox.showinfo("Patterns", "Patterns saved.")
         except Exception as e:
-            messagebox.showerror("Vzory", f"Chyba: {e}")
+            messagebox.showerror("Patterns", f"Error: {e}")
             send_error_log(str(e))
 
     def clear_log(self):
@@ -748,7 +698,7 @@ class FireGuardApp:
         file = os.path.basename(path)
         if not file.endswith(valid_ext):
             return
-        self.log(f"[•] Skenujem: {file}")
+        self.log(f"[•] Scanning: {file}")
         with open(path, "rb") as f:
             data = f.read()
         content = data.decode("utf-8", errors="ignore")
@@ -756,11 +706,11 @@ class FireGuardApp:
         md5 = hashlib.md5(data).hexdigest()
         if score >= self.threshold_var.get():
             level = classify_score(score)
-            self.log(f"⚠️  Detegované podozrivé: {file} (Level: {level}, Score: {score}) | MD5: {md5}")
+            self.log(f"⚠️  Suspicious detected: {file} (Level: {level}, Score: {score}) | MD5: {md5}")
             if notification:
-                notification.notify(title="FireGuard Alert", message=f"Hrozba: {file}", timeout=4)
+                notification.notify(title="FireGuard Alert", message=f"Threat: {file}", timeout=4)
             beep()
-            if messagebox.askyesno("Quarantine", f"Presunúť {file} do karantény?"):
+            if messagebox.askyesno("Quarantine", f"Move {file} to quarantine?"):
                 qdir = os.path.join(os.getcwd(), "quarantine")
                 os.makedirs(qdir, exist_ok=True)
                 shutil.move(path, os.path.join(qdir, file))
@@ -804,7 +754,7 @@ class FireGuardApp:
         path = filedialog.askopenfilename(filetypes=[("Executable", "*.exe"), ("All files", "*.*")])
         if not path:
             return
-        self.log(f"[•] Skenovanie správania súboru: {os.path.basename(path)}")
+        self.log(f"[•] Behavior scan of file: {os.path.basename(path)}")
         self.run_in_thread(self._behavior_task, path)
 
     def _behavior_task(self, path):
@@ -822,14 +772,14 @@ class FireGuardApp:
             folder = filedialog.askdirectory()
             if folder:
                 self.monitoring = True
-                self.log(f"[✓] Spustený real-time monitoring priečinka: {folder}")
+                self.log(f"[✓] Real-time monitoring started for: {folder}")
                 self.start_monitoring(folder)
                 send_scan_report("monitor", "start", 0, "")
         else:
             self.observer.stop()
             self.observer.join()
             self.monitoring = False
-            self.log("[•] Real-time monitoring ukončený.")
+            self.log("[•] Real-time monitoring stopped.")
             send_scan_report("monitor", "stop", 0, "")
 
     def start_monitoring(self, folder):
@@ -837,7 +787,7 @@ class FireGuardApp:
             def on_created(self2, event):
                 if event.is_directory:
                     return
-                self.log(f"[!] Zistený nový súbor: {event.src_path}")
+                self.log(f"[!] New file detected: {event.src_path}")
                 self.run_in_thread(self.scan_single, event.src_path)
                 send_scan_report("monitor", "created", 0, "")
 

@@ -15,7 +15,7 @@ You can try the hosted API at [wsl-agjq.onrender.com](https://wsl-agjq.onrender.
 - **Behavior Scanner** – check running processes for suspicious network activity
 - **Notifications** – desktop popups and optional sound alerts
 - **Quarantine** – isolate infected files
-- **Multi‑language UI** – English, Slovak, Czech and German
+- **English-only UI**
 - **Modern ttkbootstrap interface** with light and dark themes
 
 ---
