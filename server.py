@@ -18,6 +18,9 @@ db = client[DB_NAME]
 if not client.server_info():
     raise Exception("MongoDB connection failed. Check your MONGO_URI.")
 
+
+# Collections
+
 users = db['users']
 logs = db['logs']
 scans = db['scans']
@@ -33,7 +36,11 @@ def init_db():
 
 init_db()
 
+# API URL
+API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
+
+# Versioning
 LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.1.0')
 
 
@@ -44,7 +51,14 @@ def generate_token(user_id):
     }
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
 
-
+def decode_token(token):
+    try:
+        return jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.PyJWTError:
+        return None
+    
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -113,10 +127,22 @@ def hwid_report():
     logs.insert_one({'hwid': data.get('hwid'), 'info': 'hwid_report', 'file': data.get('file'), 'integrity': data.get('integrity'), 'ts': datetime.datetime.utcnow()})
     return jsonify({'status': 'ok'})
 
-
 @app.get('/api/check_update')
 def check_update():
     return jsonify({'latest': LATEST_VERSION})
+
+
+@app.post('/api/set_version')
+@auth_required
+def set_version():
+    data = request.get_json() or {}
+    ver = data.get('version')
+    if not ver:
+        return jsonify({'error': 'missing version'}), 400
+    global LATEST_VERSION
+    LATEST_VERSION = ver
+    return jsonify({'status': 'ok', 'latest': LATEST_VERSION})
+
 
 
 @app.get('/api/status')
@@ -139,11 +165,47 @@ def verify_integrity():
 
 
 @app.post('/api/report_violation')
-@auth_required
 def report_violation():
     data = request.get_json() or {}
     violations.insert_one({'hwid': data.get('hwid'), 'reason': data.get('reason'), 'ts': datetime.datetime.utcnow()})
     return jsonify({'status': 'ok'})
+
+
+@app.get('/api/clients')
+@auth_required
+def list_clients():
+    data = list(users.find({}, {'username': 1, 'hwid': 1, 'banned': 1}))
+    clients = [
+        {
+            'username': u.get('username'),
+            'hwid': u.get('hwid'),
+            'banned': u.get('banned', False),
+        }
+        for u in data
+    ]
+    return jsonify({'clients': clients})
+
+
+@app.post('/api/remove_user')
+@auth_required
+def remove_user():
+    data = request.get_json() or {}
+    query = {}
+    if data.get('username'):
+        query['username'] = data['username']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    user = users.find_one(query)
+    if not user:
+        return jsonify({'status': 'not found'}), 404
+    users.delete_one({'_id': user['_id']})
+    if user.get('hwid'):
+        logs.delete_many({'hwid': user['hwid']})
+        scans.delete_many({'hwid': user['hwid']})
+        violations.delete_many({'hwid': user['hwid']})
+    return jsonify({'status': 'removed'})
 
 
 @app.get('/api/logs/<hwid>')
@@ -153,6 +215,15 @@ def get_logs(hwid):
     entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
     return jsonify({'logs': entries})
 
+
+@app.get('/api/logs')
+@auth_required
+def get_all_logs():
+    hwid = request.args.get('hwid')
+    query = {'hwid': hwid} if hwid else {}
+    data = list(logs.find(query).sort('ts', -1))
+    entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
+    return jsonify({'logs': entries})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
