@@ -17,7 +17,12 @@ import jwt
 import datetime
 import os
 from functools import wraps
+import threading
+import time
+import requests
 
+
+# Flask app setup
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dwdhwuhdkwhudkwdhwudhwuhd')
 MONGO_URI = os.environ.get(
@@ -30,6 +35,8 @@ db = client[DB_NAME]
 if not client.server_info():
     raise Exception("MongoDB connection failed. Check your MONGO_URI.")
 
+PING_URL = os.environ.get('PING_URL')
+PING_INTERVAL = int(os.environ.get('PING_INTERVAL', '600'))
 
 # Collections
 
@@ -68,7 +75,28 @@ def init_db():
 
 LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.2.0')
 
+# Ensure the database is initialized
+if not client.server_info():
+    raise Exception("MongoDB connection failed. Check your MONGO_URI.")
+# Initialize the database
 init_db()
+# Auto-ping functionality to keep the service awake
+def start_autoping():
+    """Periodically ping the given URL to keep the service awake."""
+    if not PING_URL:
+        return
+
+    def _loop():
+        while True:
+            try:
+                requests.get(PING_URL, timeout=10)
+            except Exception:
+                pass
+            time.sleep(PING_INTERVAL)
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+start_autoping()
 
 # API URL
 API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
@@ -165,6 +193,23 @@ def root_redirect():
     """Redirect bare root to the admin login."""
     return redirect(url_for('admin_login'))
 
+@app.route('/admin/api/<path:path>')
+@admin_login_required
+def admin_api_proxy(path):
+    """Proxy API requests using the admin token so dashboard links work."""
+    method = request.args.get('method', 'GET').upper()
+    params = dict(request.args)
+    params.pop('method', None)
+    token = generate_token(session['admin'])
+    with app.test_client() as c:
+        resp = c.open(
+            f'/api/{path}',
+            method=method,
+            headers={'Authorization': f'Bearer {token}'},
+            query_string=params,
+        )
+        return (resp.data, resp.status_code, resp.headers.items())
+
 @app.route('/admin')
 @admin_login_required
 def admin_dashboard():
@@ -182,7 +227,8 @@ def admin_dashboard():
     for p, s in zip(api_routes, statuses):
         color = "green" if s == "Online" else "red"
         if any(rule.rule == p and "GET" in rule.methods for rule in app.url_map.iter_rules()):
-            link = f'<a href="{p}">{p}</a>'
+            endpoint = p[5:] if p.startswith('/api/') else p.lstrip('/')
+            link = f'<a href="{url_for("admin_api_proxy", path=endpoint)}">{p}</a>'
         else:
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
