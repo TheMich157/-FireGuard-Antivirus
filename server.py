@@ -21,6 +21,17 @@ import threading
 import time
 import requests
 
+# Simple CSS style used by rendered pages
+STYLE = """
+<style>
+body {font-family: Arial, sans-serif; background:#f0f2f5; margin:40px; color:#333;}
+h1, h2 {color:#d9534f;}
+table {border-collapse: collapse; width:100%;}
+th, td {padding:8px 12px; border:1px solid #ccc;}
+a {color:#0275d8; text-decoration:none;}
+</style>
+"""
+
 
 # Flask app setup
 app = Flask(__name__)
@@ -172,11 +183,11 @@ def admin_login():
             return redirect(url_for('admin_dashboard'))
         error = 'Invalid credentials'
     return render_template_string(
-        '''<form method="post">
+        STYLE + '''<form method="post" style="max-width:300px;margin:auto;">
             <h2>Admin Login</h2>
             <p style="color:red;">{{error}}</p>
-            <input name="username" placeholder="Username">
-            <input name="password" type="password" placeholder="Password">
+            <input name="username" placeholder="Username" style="width:100%;margin-bottom:10px;">
+            <input name="password" type="password" placeholder="Password" style="width:100%;margin-bottom:10px;">
             <button type="submit">Login</button>
         </form>''',
         error=error,
@@ -192,13 +203,29 @@ def admin_logout():
 def home_page():
     """Simple landing page for the API service."""
     return render_template_string(
-        """
+        STYLE + """
         <h1>FireGuard Antivirus</h1>
         <p>Welcome to the FireGuard API server.</p>
         <p>Visit the <a href='/admin'>admin dashboard</a> for management.</p>
+        <p>API reference: <a href='/docs'>/docs</a></p>
         <p>Project homepage: <a href='https://fireguard-antivirus.onrender.com/'>https://fireguard-antivirus.onrender.com</a></p>
         """
     )
+
+
+@app.route('/docs')
+def docs_index():
+    """List available API endpoints."""
+    routes = sorted(r.rule for r in app.url_map.iter_rules() if r.rule.startswith('/api/'))
+    links = ''.join(f"<li><a href='/docs{p}'>{p}</a></li>" for p in routes)
+    return render_template_string(STYLE + f"<h2>API Documentation</h2><ul>{links}</ul>")
+
+
+@app.route('/docs/api/<path:path>')
+@app.route('/docs/<path:path>')
+def docs_redirect(path):
+    """Redirect /docs/<endpoint> to the actual API endpoint."""
+    return redirect(f'/api/{path}')
 
 @app.route('/admin/api/<path:path>')
 @admin_login_required
@@ -240,9 +267,9 @@ def admin_dashboard():
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
     return render_template_string(
-        f'''<h2>Server Status</h2>
+        STYLE + f'''<h2>Server Status</h2>
             <p>Registered users: {users_count}</p>
-            <table border="1" cellpadding="5">{rows}</table>
+            <table>{rows}</table>
             <a href="{{{{ url_for('admin_logout') }}}}">Logout</a>'''
     )
 
