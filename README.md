@@ -94,3 +94,15 @@ pyinstaller --onefile --noconsole fireguard.py
 ```
 
 The compiled `fireguard.exe` automatically checks GitHub releases on startup and prompts to download a newer version if available.
+
+### Developer Tool EXD
+
+The EXD developer tool allows administrators to log in and monitor client activity.
+To run it locally:
+
+```bash
+python exd.py
+```
+
+The tool communicates with the backend API and requires valid admin credentials.
+
