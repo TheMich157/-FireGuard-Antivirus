@@ -29,8 +29,12 @@ h1, h2 {color:#d9534f;}
 table {border-collapse: collapse; width:100%;}
 th, td {padding:8px 12px; border:1px solid #ccc;}
 a {color:#0275d8; text-decoration:none;}
+table {border-collapse: collapse; width:100%; background:#fff;}
+th {background:#eee; text-align:left;}
+th, td {padding:8px 12px; border:1px solid #ccc;}
 </style>
 """
+
 # Basic info for the API documentation pages
 API_DOCS = {
     '/api/register': ('POST', 'create a new account'),
@@ -45,6 +49,8 @@ API_DOCS = {
     '/api/set_version': ('POST', 'set latest version (admin)'),
     '/api/download_update': ('GET', 'download newest binary'),
     '/release': ('GET', 'direct binary download'),
+    '/api/download_update': ('GET', 'download newest binary (auth)'),
+    '/release': ('GET', 'direct binary download (auth)'),
     '/api/version_history': ('GET', 'list previous versions'),
     '/api/clients': ('GET', 'list all users (admin)'),
     '/api/remove_user': ('POST', 'delete an account'),
@@ -250,10 +256,13 @@ def home_page():
 @app.route('/docs')
 def docs_index():
     """List available API endpoints."""
-    items = []
+    rows = []
     for path, (method, desc) in sorted(API_DOCS.items()):
-        items.append(f"<li><a href='/docs{path}'>{method} {path}</a> - {desc}</li>")
-    return render_template_string(STYLE + "<h2>API Documentation</h2><ul>" + ''.join(items) + "</ul>")
+            rows.append(
+            f"<tr><td><a href='/docs{path}'>{path}</a></td><td>{method}</td><td>{desc}</td></tr>"
+        )
+    table = "<table><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr>" + "".join(rows) + "</table>"
+    return render_template_string(STYLE + "<h2>API Documentation</h2>" + table)
 
 
 @app.route('/docs/api/<path:path>')
@@ -270,7 +279,13 @@ def docs_page(path):
     if not info:
         return redirect(f'/api/{path}')
     method, desc = info
-    html = f"<h2>{method} {endpoint}</h2><p>{desc}</p><p><a href='{endpoint}'>Go to endpoint</a></p>"
+    html = (
+        f"<h2>{endpoint}</h2>"
+        f"<p><strong>Method:</strong> {method}</p>"
+        f"<p>{desc}</p>"
+        f"<p><a href='{endpoint}'>Go to endpoint</a></p>"
+        f"<p><a href='/docs'>&larr; Back to index</a></p>"
+    )
     return render_template_string(STYLE + html)
 
 @app.route('/admin/api/<path:path>')
@@ -668,6 +683,7 @@ def version_history():
 
 
 @app.get('/api/download_update')
+@auth_required
 def download_update():
     path = os.environ.get('LATEST_BINARY', '')
     if not path or not os.path.exists(path):
@@ -675,6 +691,7 @@ def download_update():
     return send_file(path, as_attachment=True)
 
 @app.get('/release')
+@auth_required
 def release_file():
     """Direct download of the latest FireGuard release."""
     path = os.environ.get('LATEST_BINARY', '')
