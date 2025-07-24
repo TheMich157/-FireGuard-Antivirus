@@ -94,3 +94,34 @@ pyinstaller --onefile --noconsole fireguard.py
 ```
 
 The compiled `fireguard.exe` automatically checks GitHub releases on startup and prompts to download a newer version if available.
+
+### Account Login
+
+FireGuard now requires users to create a free account. On first launch you will
+be prompted to register or log in. After successful authentication a license
+token and username are stored locally and used for all API communication. The
+Account tab lets you view the current user and log out at any time.
+
+### Developer Tool EXD
+
+The EXD developer tool allows administrators to log in and monitor client activity.
+Default credentials are `admin:admin` when running the API locally.
+To run it locally:
+
+```bash
+python exd.py
+```
+
+The tool communicates with the backend API and requires valid admin credentials.
+
+
+### Backend API Deployment
+
+A simple Flask API implementation is provided in `server.py`. You can deploy it to [Render](https://render.com) using the included `render.yaml` configuration:
+
+```bash
+pip install -r requirements.txt
+python server.py  # local testing
+```
+
+On Render, create a new Web Service from this repo and it will automatically use `gunicorn server:app` to start the API.
