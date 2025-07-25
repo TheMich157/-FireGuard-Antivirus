@@ -177,7 +177,7 @@ def start_autoping():
 start_autoping()
 
 # API URL
-API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
+API_URL = os.environ.get("API_URL", "https://fireguard.aigenres.xyz")
 
 
 
@@ -898,6 +898,13 @@ def control_restart():
 def control_shutdown():
     threading.Thread(target=os._exit, args=(0,)).start()
     return jsonify({'status': 'shutting down'})
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'not found'}), 404
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'internal server error'}), 500
 
 
 if __name__ == '__main__':

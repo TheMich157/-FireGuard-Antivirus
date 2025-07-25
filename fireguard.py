@@ -47,7 +47,7 @@ if not os.path.exists(LOG_PATH):
         f.write(f"Version: {VERSION}\n")
         f.write("Log started.\n")
 # Default API URL, can be overridden by environment variable
-API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
+API_URL = os.environ.get("API_URL", "https://fireguard.aigenres.xyz")
 LICENSE_FILE = "license.json"
 USERNAME = None
 LICENSE_KEY = None

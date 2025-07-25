@@ -6,7 +6,7 @@ from ttkbootstrap import ttk
 from tkinter import messagebox, simpledialog
 import requests
 
-API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
+API_URL = os.environ.get("API_URL", "https://fireguard.aigenres.xyz")
 
 class EXDApp:
     def __init__(self):
