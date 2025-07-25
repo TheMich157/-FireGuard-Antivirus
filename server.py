@@ -21,6 +21,7 @@ import threading
 import time
 import requests
 import uuid
+import sys
 
 # Simple CSS style used by rendered pages
 STYLE = """
@@ -68,10 +69,8 @@ API_DOCS = {
     '/api/login': ('POST', 'authenticate user'),
     '/api/me': ('GET', 'return current account info'),
     '/api/change_password': ('POST', "change logged in user's password"),
-    '/api/logout': ('POST', 'invalidate token'),
     '/api/reset_password_request': ('POST', 'start a password reset'),
     '/api/reset_password': ('POST', 'complete password reset'),
-    '/api/refresh_token': ('POST', 'renew JWT'),
     '/api/check_update': ('GET', 'get latest client version'),
     '/api/set_version': ('POST', 'set latest version (admin)'),
     '/api/download_update': ('GET', 'download newest binary'),
@@ -102,6 +101,8 @@ API_DOCS = {
     '/api/analyze_file': ('POST', 'upload file for scoring'),
     '/api/get_threat_score/<md5>': ('GET', 'query score by hash'),
     '/api/submit_feedback': ('POST', 'submit false-positive feedback'),
+    '/api/control/restart': ('POST', 'restart the server (admin)'),
+    '/api/control/shutdown': ('POST', 'shutdown the server (admin)'),
 }
 
 # Flask app setup
@@ -119,6 +120,8 @@ if not client.server_info():
 
 PING_URL = os.environ.get('PING_URL')
 PING_INTERVAL = int(os.environ.get('PING_INTERVAL', '600'))
+DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
+DISCORD_CHANNEL_ID = os.environ.get('DISCORD_CHANNEL_ID')
 
 # Collections
 
@@ -147,15 +150,7 @@ def init_db():
     if versions.count_documents({}) == 0:
         versions.insert_one({'version': LATEST_VERSION, 'ts': datetime.datetime.utcnow()})
 
-def init_db():
-    users.create_index('username', unique=True)
-    users.create_index('hwid', unique=True, sparse=True)
-    if not users.find_one({'username': 'admin'}):
-        admin_pass = os.environ.get('ADMIN_PASS', 'admin')
-        hashed = generate_password_hash(admin_pass)
-        users.insert_one({'username': 'admin', 'password': hashed, 'role': 'admin', 'banned': False})
-
-LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.2.0')
+LATEST_VERSION = os.environ.get('LATEST_VERSION', '0.3.1')
 
 # Ensure the database is initialized
 if not client.server_info():
@@ -186,14 +181,6 @@ API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
 
 
-def generate_token(user_id):
-    payload = {
-        'user_id': str(user_id),
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-    }
-    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
-
-
 def log_activity(user_id, action, info=None):
     """Record an admin or user action."""
     try:
@@ -206,26 +193,35 @@ def log_activity(user_id, action, info=None):
     except Exception:
         pass
 
-def decode_token(token):
+
+def send_license_discord(username: str, license_key: str) -> None:
+    """Notify Discord when a new license is generated using a bot."""
+    if not DISCORD_BOT_TOKEN or not DISCORD_CHANNEL_ID:
+        return
     try:
-        return jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.PyJWTError:
-        return None
-    
+        requests.post(
+            f"https://discord.com/api/v10/channels/{DISCORD_CHANNEL_ID}/messages",
+            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            json={"content": f"New license for {username}: `{license_key}`"},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
 def auth_required(f):
+    """Require a valid license key via the ``X-License`` header."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.headers.get('Authorization', '')
-        if not auth.startswith('Bearer '):
-            return jsonify({'error': 'Missing token'}), 401
-        token = auth.split(' ', 1)[1]
-        try:
-            decoded = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            request.user_id = decoded['user_id']
-        except jwt.PyJWTError:
-            return jsonify({'error': 'Invalid token'}), 401
+        if request.headers.get('X-Admin') == '1' and session.get('admin'):
+            request.user_id = session['admin']
+            return f(*args, **kwargs)
+        key = request.headers.get('X-License')
+        if not key:
+            return jsonify({'error': 'missing license'}), 401
+        user = users.find_one({'license': key})
+        if not user:
+            return jsonify({'error': 'invalid license'}), 403
+        request.user_id = str(user['_id'])
         return f(*args, **kwargs)
     return decorated
 
@@ -296,12 +292,12 @@ LANDING_PAGE = """
 async function register(){
     const res = await fetch('/api/register', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('reg_user').value, password:document.getElementById('reg_pass').value})});
     const data = await res.json();
-    document.getElementById('status').innerText = data.token ? 'Registered! Token: '+data.token : (data.error||'Error');
+    document.getElementById('status').innerText = data.license ? 'Registered! License: '+data.license : (data.error||'Error');
 }
 async function login(){
     const res = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:document.getElementById('log_user').value, password:document.getElementById('log_pass').value})});
     const data = await res.json();
-    document.getElementById('status').innerText = data.token ? 'Logged in! Token: '+data.token : (data.error||'Error');
+    document.getElementById('status').innerText = data.license ? 'Logged in! License: '+data.license : (data.error||'Error');
 }
 </script>
 </body>
@@ -359,12 +355,11 @@ def admin_api_proxy(path):
     method = request.args.get('method', 'GET').upper()
     params = dict(request.args)
     params.pop('method', None)
-    token = generate_token(session['admin'])
     with app.test_client() as c:
         resp = c.open(
             f'/api/{path}',
             method=method,
-            headers={'Authorization': f'Bearer {token}'},
+            headers={'X-Admin': '1'},
             query_string=params,
         )
         return (resp.data, resp.status_code, resp.headers.items())
@@ -418,8 +413,8 @@ def register():
     }
     res = users.insert_one(user)
     log_activity(res.inserted_id, 'register', data.get('username'))
-    token = generate_token(res.inserted_id)
-    return jsonify({'token': token, 'license': license_key})
+    send_license_discord(data.get('username'), license_key)
+    return jsonify({'license': license_key})
 
 
 @app.post('/api/login')
@@ -433,9 +428,8 @@ def login():
         return jsonify({'error': 'hwid mismatch'}), 403
     if hwid and not user.get('hwid'):
         users.update_one({'_id': user['_id']}, {'$set': {'hwid': hwid}})
-    token = generate_token(user['_id'])
     log_activity(user['_id'], 'login')
-    return jsonify({'token': token})
+    return jsonify({'license': user.get('license')})
 
 
 @app.post('/api/log_error')
@@ -672,6 +666,7 @@ def add_license():
     if res.matched_count == 0:
         return jsonify({'error': 'not found'}), 404
     log_activity(request.user_id, 'add_license', username)
+    send_license_discord(username, license_key)
     return jsonify({'license': license_key})
 
 
@@ -766,12 +761,7 @@ def reset_password():
     return jsonify({'status': 'ok'})
 
 
-@app.post('/api/refresh_token')
-@auth_required
-def refresh_token():
-    new_token = generate_token(request.user_id)
-    log_activity(request.user_id, 'refresh_token')
-    return jsonify({'token': new_token})
+
 
 
 @app.get('/api/inbox')
@@ -896,6 +886,20 @@ def submit_feedback():
     data = request.get_json() or {}
     feedback.insert_one({'user_id': ObjectId(request.user_id), 'msg': data.get('msg'), 'ts': datetime.datetime.utcnow()})
     return jsonify({'status': 'ok'})
+
+
+@app.post('/api/control/restart')
+@admin_login_required
+def control_restart():
+    threading.Thread(target=os.execl, args=(sys.executable, sys.executable, *sys.argv)).start()
+    return jsonify({'status': 'restarting'})
+
+
+@app.post('/api/control/shutdown')
+@admin_login_required
+def control_shutdown():
+    threading.Thread(target=os._exit, args=(0,)).start()
+    return jsonify({'status': 'shutting down'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

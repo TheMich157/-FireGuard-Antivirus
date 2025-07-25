@@ -29,7 +29,7 @@ You can try the hosted API at [wsl-agjq.onrender.com](https://wsl-agjq.onrender.
    ```bash
    python fireguard.py
    ```
-   The first run asks you to register or log in. Credentials are stored in `license.json` and used for all API calls.
+   The first run asks you to register or log in. A license key is generated during registration and saved to `license.json`. On login, the key is copied to your clipboard for convenience.
 
 ### Building a Windows executable
 ```bash
@@ -56,6 +56,8 @@ API_URL=https://myserver.com python fireguard.py
    - `ADMIN_PASS` – initial admin password
    - `LATEST_VERSION` – current client version tag
    - `LATEST_BINARY` – path to the latest `.exe` to serve via `/release`
+   - `DISCORD_BOT_TOKEN` – bot token for license notifications
+   - `DISCORD_CHANNEL_ID` – channel ID for license notifications
 3. Start locally with:
    ```bash
    python server.py
@@ -90,10 +92,8 @@ The backend exposes `/admin` – a simple page listing API routes with a green/r
 | `POST /api/login` | authenticate user |
 | `GET /api/me` | return current account info |
 | `POST /api/change_password` | change logged in user's password |
-| `POST /api/logout` | invalidate token (optional) |
 | `POST /api/reset_password_request` | start a password reset |
 | `POST /api/reset_password` | complete password reset |
-| `POST /api/refresh_token` | renew JWT |
 | `GET /api/check_update` | get latest client version |
 | `POST /api/set_version` | set latest version (admin) |
 | `GET /api/download_update` | download newest binary |
@@ -118,8 +118,10 @@ The backend exposes `/admin` – a simple page listing API routes with a green/r
 | `POST /api/analyze_file` | upload file for scoring |
 | `GET /api/get_threat_score/<md5>` | query score by hash |
 | `POST /api/submit_feedback` | submit false‑positive feedback |
+| `POST /api/control/restart` | restart the server (admin) |
+| `POST /api/control/shutdown` | shutdown the server (admin) |
 
-Every endpoint requires a `Bearer` token header except `/admin` and the registration/login routes.
+Every endpoint requires an `X-License` header except `/admin` and the registration/login routes.
 
 ---
 

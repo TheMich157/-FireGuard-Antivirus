@@ -10,7 +10,7 @@ API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 
 class EXDApp:
     def __init__(self):
-        self.token = None
+        self.license = None
         self.log_job = None
         self.root = ttkb.Window(title="EXD Developer Tool")
         self.create_login_ui()
@@ -44,7 +44,7 @@ class EXDApp:
         try:
             resp = requests.post(f"{API_URL}/api/login", json={"username": user, "password": password}, timeout=5)
             if resp.status_code == 200:
-                self.token = resp.json().get("token")
+                self.license = resp.json().get("license")
                 self.create_main_ui()
             else:
                 messagebox.showerror("Login Failed", f"Status: {resp.status_code}\n{resp.text}")
@@ -91,9 +91,9 @@ class EXDApp:
         self.load_logs(hwid)
 
     def load_logs(self, hwid=None):
-        if not self.token:
+        if not self.license:
             return
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         params = {"hwid": hwid} if hwid else {}
         try:
             resp = requests.get(
@@ -118,9 +118,9 @@ class EXDApp:
         self.fetch_logs()
         self.log_job = self.root.after(5000, self.poll_logs)
     def load_clients(self):
-        if not self.token:
+        if not self.license:
             return
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.get(f"{API_URL}/api/clients", headers=headers, timeout=5)
             if resp.status_code == 200:
@@ -134,7 +134,7 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
     
     def license_check(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
@@ -144,7 +144,7 @@ class EXDApp:
         key = simpledialog.askstring("License Check", "Enter license key:")
         if not key:
             return
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/license_check",
@@ -164,7 +164,7 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
 
     def add_license(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
@@ -174,7 +174,7 @@ class EXDApp:
         payload = {"username": username}
         if key:
             payload["license"] = key
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(f"{API_URL}/api/add_license", headers=headers, json=payload, timeout=5)
             if resp.status_code == 200:
@@ -186,13 +186,13 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
 
     def remove_license(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
             return
         username = self.clients_tree.item(item[0]).get("values")[0]
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/remove_license",
@@ -208,13 +208,13 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
 
     def ban_hwid(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
             return
         hwid = self.clients_tree.item(item[0]).get("values")[1]
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/ban_hwid",
@@ -256,12 +256,12 @@ class EXDApp:
         self.root.mainloop()
 
     def push_update(self):
-        if not self.token:
+        if not self.license:
             return
         version = simpledialog.askstring("Push Update", "New version tag:")
         if not version:
             return
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/set_version",
@@ -277,7 +277,7 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
 
     def toggle_ban(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
@@ -287,7 +287,7 @@ class EXDApp:
             return
         username, hwid, banned = values[0], values[1], values[2]
         new_status = not banned
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/set_banned",
@@ -303,7 +303,7 @@ class EXDApp:
             messagebox.showerror("Error", str(e))
 
     def remove_client(self):
-        if not self.token:
+        if not self.license:
             return
         item = self.clients_tree.selection()
         if not item:
@@ -314,7 +314,7 @@ class EXDApp:
         username, hwid = values[0], values[1]
         if not messagebox.askyesno("Remove", f"Remove {username}?"):
             return
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {"X-License": self.license}
         try:
             resp = requests.post(
                 f"{API_URL}/api/remove_user",
