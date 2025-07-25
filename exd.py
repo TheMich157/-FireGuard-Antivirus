@@ -22,11 +22,11 @@ class EXDApp:
         frm.pack(expand=True)
 
         ttk.Label(frm, text="Username").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.username_var = tk.StringVar()
+        self.username_var = tk.StringVar(value="admin")
         ttk.Entry(frm, textvariable=self.username_var, width=30).grid(row=0, column=1)
 
         ttk.Label(frm, text="Password").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.password_var = tk.StringVar()
+        self.password_var = tk.StringVar(value="admin")
         ttk.Entry(frm, textvariable=self.password_var, show="*", width=30).grid(row=1, column=1)
 
         ttk.Button(frm, text="Login", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
@@ -62,10 +62,6 @@ class EXDApp:
         ttk.Button(top, text="Push Update", command=self.push_update).pack(side=tk.LEFT)
         ttk.Button(top, text="Toggle Ban", command=self.toggle_ban).pack(side=tk.LEFT)
         ttk.Button(top, text="Remove Client", command=self.remove_client).pack(side=tk.LEFT)
-        ttk.Button(top, text="Check License", command=self.license_check).pack(side=tk.LEFT)
-        ttk.Button(top, text="Add License", command=self.add_license).pack(side=tk.LEFT)
-        ttk.Button(top, text="Remove License", command=self.remove_license).pack(side=tk.LEFT)
-        ttk.Button(top, text="Ban HWID", command=self.ban_hwid).pack(side=tk.LEFT)
         ttk.Button(top, text="Logout", command=self.create_login_ui).pack(side=tk.RIGHT)
 
         self.clients_tree = ttk.Treeview(self.root, columns=("username", "hwid", "banned"), show="headings")
@@ -132,128 +128,6 @@ class EXDApp:
                 messagebox.showerror("Error", resp.text)
         except Exception as e:
             messagebox.showerror("Error", str(e))
-    
-    def license_check(self):
-        if not self.token:
-            return
-        item = self.clients_tree.selection()
-        if not item:
-            messagebox.showwarning("License", "Select a client first")
-            return
-        username = self.clients_tree.item(item[0]).get("values")[0]
-        key = simpledialog.askstring("License Check", "Enter license key:")
-        if not key:
-            return
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            resp = requests.post(
-                f"{API_URL}/api/license_check",
-                headers=headers,
-                json={"username": username, "license": key},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("valid"):
-                    messagebox.showinfo("License Check", "License is valid")
-                else:
-                    messagebox.showwarning("License Check", "License is invalid or expired")
-            else:
-                messagebox.showerror("Error", resp.text)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def add_license(self):
-        if not self.token:
-            return
-        item = self.clients_tree.selection()
-        if not item:
-            return
-        username = self.clients_tree.item(item[0]).get("values")[0]
-        key = simpledialog.askstring("Add License", "License key (blank to generate):")
-        payload = {"username": username}
-        if key:
-            payload["license"] = key
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            resp = requests.post(f"{API_URL}/api/add_license", headers=headers, json=payload, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                messagebox.showinfo("Add License", f"License: {data.get('license')}")
-            else:
-                messagebox.showerror("Error", resp.text)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def remove_license(self):
-        if not self.token:
-            return
-        item = self.clients_tree.selection()
-        if not item:
-            return
-        username = self.clients_tree.item(item[0]).get("values")[0]
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            resp = requests.post(
-                f"{API_URL}/api/remove_license",
-                headers=headers,
-                json={"username": username},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                messagebox.showinfo("Remove License", "Removed")
-            else:
-                messagebox.showerror("Error", resp.text)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def ban_hwid(self):
-        if not self.token:
-            return
-        item = self.clients_tree.selection()
-        if not item:
-            return
-        hwid = self.clients_tree.item(item[0]).get("values")[1]
-        headers = {"Authorization": f"Bearer {self.token}"}
-        try:
-            resp = requests.post(
-                f"{API_URL}/api/ban_hwid",
-                headers=headers,
-                json={"hwid": hwid},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                self.load_clients()
-            else:
-                messagebox.showerror("Error", resp.text)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def create_license_check_ui(self):
-        self.clear_root()
-        frm = ttk.Frame(self.root, padding=20)
-        frm.pack(expand=True)
-
-        ttk.Label(frm, text="License Key").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.license_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.license_var, width=30).grid(row=0, column=1)
-
-        ttk.Button(frm, text="Check License", command=self.license_check).grid(row=1, column=0, columnspan=2, pady=10)
-        ttk.Button(frm, text="Back", command=self.create_main_ui).grid(row=2, column=0, columnspan=2)
-        self.root.mainloop()
-
-    def create_push_update_ui(self):
-        self.clear_root()
-        frm = ttk.Frame(self.root, padding=20)
-        frm.pack(expand=True)
-
-        ttk.Label(frm, text="New Version Tag").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.version_var = tk.StringVar()
-        ttk.Entry(frm, textvariable=self.version_var, width=30).grid(row=0, column=1)
-
-        ttk.Button(frm, text="Push Update", command=self.push_update).grid(row=1, column=0, columnspan=2, pady=10)
-        ttk.Button(frm, text="Back", command=self.create_main_ui).grid(row=2, column=0, columnspan=2)
-        self.root.mainloop()
 
     def push_update(self):
         if not self.token:
@@ -329,16 +203,5 @@ class EXDApp:
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
-
 if __name__ == "__main__":
     EXDApp()
-# This code is part of the EXD Developer Tool for FireGuard Antivirus.
-# It provides a GUI for managing clients, logs, licenses, and updates.
-# The tool allows administrators to log in, view client information, fetch logs,
-# push updates, toggle bans, and manage licenses.
-# The API_URL is set via environment variable or defaults to a public endpoint.
-# The application uses ttkbootstrap for a modern look and feel.
-# The main class EXDApp handles the UI and interactions with the API.
-# The application is designed to be user-friendly and efficient for managing antivirus clients.
-# The code is structured to allow easy expansion and modification for future features.
-# The application is intended for use by administrators of the FireGuard Antivirus system.

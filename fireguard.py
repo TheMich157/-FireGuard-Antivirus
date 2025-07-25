@@ -49,7 +49,6 @@ if not os.path.exists(LOG_PATH):
 # Default API URL, can be overridden by environment variable
 API_URL = os.environ.get("API_URL", "https://fireguard-antivirus.onrender.com")
 LICENSE_FILE = "license.json"
-TOKEN = None
 USERNAME = None
 LICENSE_KEY = None
 
@@ -63,53 +62,38 @@ def get_hwid() -> str:
 
 HWID = get_hwid()
 
-def load_token():
-    global TOKEN, USERNAME, LICENSE_KEY
+def load_credentials():
+    global USERNAME, LICENSE_KEY
     try:
         with open(LICENSE_FILE, "r", encoding="utf-8") as f:
            data = json.load(f)
-           TOKEN = data.get("token")
            USERNAME = data.get("username")
            LICENSE_KEY = data.get("license")
     except FileNotFoundError:
-        TOKEN = None
         USERNAME = None
         LICENSE_KEY = None
 
-def save_token(token: str, username: str, license_key: str | None = None):
-    global TOKEN, USERNAME, LICENSE_KEY
-    TOKEN = token
+def save_credentials(username: str, license_key: str):
+    global USERNAME, LICENSE_KEY
     USERNAME = username
-    if license_key is not None:
-        LICENSE_KEY = license_key
-    data = {"token": token, "username": username}
-    if LICENSE_KEY:
-        data["license"] = LICENSE_KEY
+    LICENSE_KEY = license_key
+    data = {"username": username, "license": license_key}
     try:
         with open(LICENSE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f)
     except Exception:
         pass
 
+
+
 def logout_user():
-    """Clear stored token."""
-    global TOKEN, USERNAME, LICENSE_KEY
-    TOKEN = None
+    """Clear stored credentials."""
+    global USERNAME, LICENSE_KEY
     USERNAME = None
     LICENSE_KEY = None
     try:
         if os.path.exists(LICENSE_FILE):
             os.remove(LICENSE_FILE)
-    except Exception:
-        pass
-
-def save_token(token: str, username: str):
-    global TOKEN, USERNAME
-    TOKEN = token
-    USERNAME = username
-    try:
-        with open(LICENSE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"token": token, "username": username}, f)
     except Exception:
         pass
 
@@ -119,9 +103,9 @@ def register_user(username: str, password: str) -> bool:
     r = api_post("/api/register", {"username": username, "password": password, "hwid": HWID})
     if isinstance(r, requests.Response) and r.ok:
         data = r.json()
-        tok = data.get("token")
-        if tok:
-            save_token(tok, username, data.get("license"))
+        lic = data.get("license")
+        if lic:
+            save_credentials(username, lic)
             return True
     return False
 
@@ -129,9 +113,9 @@ def login_user(username: str, password: str) -> bool:
     r = api_post("/api/login", {"username": username, "password": password})
     if isinstance(r, requests.Response) and r.ok:
         data = r.json()
-        tok = data.get("token")
-        if tok:
-            save_token(tok, username, data.get("license"))
+        lic = data.get("license")
+        if lic:
+            save_credentials(username, lic)
             return True
     return False
 
@@ -140,8 +124,8 @@ def login_user(username: str, password: str) -> bool:
 def api_post(endpoint: str, data: dict):
     """Helper to POST JSON data to the backend API."""
     headers = {}
-    if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"
+    if LICENSE_KEY:
+        headers["X-License"] = LICENSE_KEY
     try:
         return requests.post(
             f"{API_URL}{endpoint}", json=data, headers=headers, timeout=5
@@ -151,8 +135,8 @@ def api_post(endpoint: str, data: dict):
 
 def api_get(endpoint: str, params: dict | None = None):
     headers = {}
-    if TOKEN:
-        headers["Authorization"] = f"Bearer {TOKEN}"
+    if LICENSE_KEY:
+        headers["X-License"] = LICENSE_KEY
     try:
         return requests.get(
             f"{API_URL}{endpoint}", params=params, headers=headers, timeout=5
@@ -569,8 +553,8 @@ class FireGuardApp:
         self.update_account_label()
 
     def authenticate(self):
-        load_token()
-        if TOKEN:
+        load_credentials()
+        if LICENSE_KEY and USERNAME:
             self.update_account_label()
             return
         dialog = tk.Toplevel(self.root)
@@ -887,12 +871,12 @@ class FireGuardApp:
         self.observer.start()
 
     def check_license(self):
-        if not TOKEN:
+        global LICENSE_KEY
+        if not LICENSE_KEY or not USERNAME:
             self.authenticate()
-        if not TOKEN:
+        if not LICENSE_KEY or not USERNAME:
             messagebox.showerror("FireGuard", "You must be logged in to use this feature.")
             return False
-        global LICENSE_KEY
         if not LICENSE_KEY:
             key = simpledialog.askstring("License", "Enter your license key:")
             if not key:
@@ -905,7 +889,7 @@ class FireGuardApp:
         data = r.json()
         if data.get("valid"):
             messagebox.showinfo("FireGuard", "Your license is valid.")
-            save_token(TOKEN, USERNAME, LICENSE_KEY)
+            save_credentials(USERNAME, LICENSE_KEY)
         else:
             messagebox.showwarning("FireGuard", "Your license is invalid or expired.")
             LICENSE_KEY = None
@@ -914,6 +898,7 @@ class FireGuardApp:
             reason = data.get("reason") or "User banned"
             kill_switch(reason)
         return True
+
 
 if __name__ == '__main__':
  app = FireGuardApp(ttkb.Window())
