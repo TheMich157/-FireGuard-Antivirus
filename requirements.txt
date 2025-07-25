@@ -10,3 +10,4 @@ flask
 pymongo
 pyjwt
 werkzeug
+discord.py

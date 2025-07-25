@@ -76,10 +76,24 @@ Run `python exd.py` to launch the admin toolkit. After logging in you can:
 - Toggle bans or remove users
 - Browse logs in real time
 
+## Discord Bot
+`bot.py` provides a small Discord bot with slash commands for notifying new
+licenses and remotely restarting or shutting down the server. Set the
+`DISCORD_BOT_TOKEN`, optional `ADMIN_LICENSE`, and `API_URL` environment
+variables. The server will launch the bot automatically if a token is present or
+you can run it manually with:
+
+```bash
+python bot.py
+```
+
 ---
 
 ## Admin Dashboard
-The backend exposes `/admin` – a simple page listing API routes with a green/red status indicator and the total user count. Use your EXD credentials to log in.
+The backend exposes `/admin` – a simple page listing API routes with a green/red
+status indicator and the total user count. After logging in you can restart or
+shut down the server and access helper pages to ban users, run the kill switch,
+check licenses or look up usernames.
 
 ---
 
@@ -103,8 +117,11 @@ The backend exposes `/admin` – a simple page listing API routes with a green/r
 | `POST /api/remove_user` | delete an account |
 | `POST /api/ban` | ban a user or HWID |
 | `POST /api/unban` | remove a ban |
+| `POST /api/ban_hwid` | ban by HWID |
 | `POST /api/set_banned` | toggle ban status |
 | `POST /api/unlink_hwid` | reset user's HWID |
+| `POST /api/find_username` | lookup username by license or HWID |
+| `GET /api/my_license` | current license status |
 | `POST /api/security/kill_switch` | force shutdown on a client |
 | `POST /api/security/flag_hwid` | mark HWID as suspicious |
 | `GET /api/activity_log` | admin activity history |
