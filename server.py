@@ -236,6 +236,19 @@ def admin_login_required(f):
     return wrapped
 
 
+def admin_required(f):
+    """Ensure the authenticated user has admin role."""
+    @auth_required
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = users.find_one({'_id': ObjectId(request.user_id)})
+        if not user or user.get('role') != 'admin':
+            return jsonify({'error': 'admin only'}), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     error = ''
@@ -323,6 +336,67 @@ def docs_index():
     return render_template_string(STYLE + html)
 
 
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password_page():
+    """Simple interface for requesting and completing a password reset."""
+    msg = ''
+    if request.method == 'POST':
+        if request.form.get('action') == 'request':
+            user = request.form.get('username')
+            with app.test_client() as c:
+                resp = c.post('/api/reset_password_request', json={'username': user})
+                if resp.status_code == 200:
+                    msg = 'Token: ' + resp.json.get('token', '')
+                else:
+                    msg = resp.json.get('error', '')
+        else:
+            token = request.form.get('token')
+            new = request.form.get('new_password')
+            with app.test_client() as c:
+                resp = c.post('/api/reset_password', json={'token': token, 'new_password': new})
+                msg = resp.json.get('status') or resp.json.get('error', '')
+    html = (
+        "<div class='container'><h2>Password Reset</h2>"
+        f"<p>{msg}</p>"
+        "<form method='post'>"
+        "<input name='username' placeholder='Username'>"
+        "<button name='action' value='request' type='submit'>Request Token</button>"
+        "</form>"
+        "<form method='post' style='margin-top:15px'>"
+        "<input name='token' placeholder='Token'>"
+        "<input name='new_password' placeholder='New Password' type='password'>"
+        "<button name='action' value='reset' type='submit'>Reset Password</button>"
+        "</form>"
+        "</div>"
+    )
+    return render_template_string(STYLE + html)
+
+
+@app.route('/license_status', methods=['GET', 'POST'])
+def license_status_page():
+    result = ''
+    if request.method == 'POST':
+        username = request.form.get('username')
+        lic = request.form.get('license')
+        with app.test_client() as c:
+            resp = c.post('/api/license_check', json={'username': username, 'license': lic}, headers={'X-License': lic})
+            if resp.status_code == 200:
+                result = str(resp.json)
+            else:
+                result = resp.json.get('error', '')
+    html = (
+        "<div class='container'><h2>License Status</h2>"
+        f"<p>{result}</p>"
+        "<form method='post'>"
+        "<input name='username' placeholder='Username' required>"
+        "<input name='license' placeholder='License' required>"
+        "<button type='submit'>Check</button>"
+        "</form>"
+        "</div>"
+    )
+    return render_template_string(STYLE + html)
+
+
 @app.route('/docs/api/<path:path>')
 def docs_api_redirect(path):
     """Direct redirect to the raw API endpoint."""
@@ -386,13 +460,21 @@ def admin_dashboard():
         else:
             link = p
         rows += f'<tr><td>{link}</td><td style="color:{color}">{s}</td></tr>'
+    controls = (
+        f"<form method='post' action='{url_for('admin_api_proxy', path='control/restart', method='POST')}' style='display:inline;margin-right:10px'>"
+        f"<button type='submit'>Restart Server</button></form>"
+        f"<form method='post' action='{url_for('admin_api_proxy', path='control/shutdown', method='POST')}' style='display:inline;margin-right:10px'>"
+        f"<button type='submit'>Shutdown Server</button></form>"
+    )
     return render_template_string(
         STYLE
         + f"<div class='container'><h2>Server Status</h2>"
+        + controls
         + f"<p>Registered users: {users_count}</p>"
         + f"<table>{rows}</table>"
         + f"<a href='{url_for('admin_logout')}'>Logout</a></div>"
     )
+
 
 
 @app.post('/api/register')
@@ -410,6 +492,7 @@ def register():
         'hwid': data.get('hwid'),
         'banned': False,
         'license': license_key,
+        'expires': datetime.datetime.utcnow() + datetime.timedelta(days=90),
     }
     res = users.insert_one(user)
     log_activity(res.inserted_id, 'register', data.get('username'))
@@ -460,7 +543,7 @@ def check_update():
 
 
 @app.post('/api/set_version')
-@auth_required
+@admin_required
 def set_version():
     data = request.get_json() or {}
     ver = data.get('version')
@@ -474,7 +557,7 @@ def set_version():
 
 
 @app.post('/api/set_banned')
-@auth_required
+@admin_required
 def set_banned():
     data = request.get_json() or {}
     query = {}
@@ -545,7 +628,7 @@ def list_clients():
 
 
 @app.post('/api/remove_user')
-@auth_required
+@admin_required
 def remove_user():
     data = request.get_json() or {}
     query = {}
@@ -568,7 +651,7 @@ def remove_user():
 
 
 @app.get('/api/logs/<hwid>')
-@auth_required
+@admin_required
 def get_logs(hwid):
     data = list(logs.find({'hwid': hwid}).sort('ts', -1))
     entries = [f"{d.get('ts')}: {d.get('error', d.get('info', ''))}" for d in data]
@@ -576,7 +659,7 @@ def get_logs(hwid):
 
 
 @app.get('/api/logs')
-@auth_required
+@admin_required
 def get_all_logs():
     hwid = request.args.get('hwid')
     query = {'hwid': hwid} if hwid else {}
@@ -585,14 +668,14 @@ def get_all_logs():
     return jsonify({'logs': entries})
 
 @app.get('/api/logs/errors')
-@auth_required
+@admin_required
 def get_error_logs():
     data = list(logs.find({'error': {'$exists': True}}).sort('ts', -1))
     entries = [f"{d.get('ts')}: {d.get('error')}" for d in data]
     return jsonify({'logs': entries})
 
 @app.get('/api/activity_log')
-@auth_required
+@admin_required
 def activity_log_route():
     uid = request.args.get('user_id')
     query = {'user_id': uid} if uid else {}
@@ -610,7 +693,7 @@ def activity_log_route():
 
 
 @app.post('/api/ban')
-@auth_required
+@admin_required
 def ban_user():
     data = request.get_json() or {}
     query = {}
@@ -626,7 +709,7 @@ def ban_user():
 
 
 @app.post('/api/unban')
-@auth_required
+@admin_required
 def unban_user():
     data = request.get_json() or {}
     query = {}
@@ -642,7 +725,7 @@ def unban_user():
 
 
 @app.post('/api/ban_hwid')
-@auth_required
+@admin_required
 def ban_hwid():
     data = request.get_json() or {}
     hwid = data.get('hwid')
@@ -654,7 +737,7 @@ def ban_hwid():
 
 
 @app.post('/api/add_license')
-@auth_required
+@admin_required
 def add_license():
     data = request.get_json() or {}
     username = data.get('username')
@@ -670,7 +753,7 @@ def add_license():
 
 
 @app.post('/api/remove_license')
-@auth_required
+@admin_required
 def remove_license():
     data = request.get_json() or {}
     username = data.get('username')
@@ -695,7 +778,27 @@ def license_check_api():
     if not user:
         return jsonify({'valid': False}), 404
     valid = license_key == user.get('license')
-    return jsonify({'valid': valid, 'banned': user.get('banned', False)})
+    exp = user.get('expires')
+    expired = bool(exp and exp < datetime.datetime.utcnow())
+    return jsonify({'valid': valid, 'expired': expired, 'banned': user.get('banned', False)})
+
+
+@app.post('/api/find_username')
+@admin_required
+def find_username():
+    """Lookup username by license key or HWID."""
+    data = request.get_json() or {}
+    query = {}
+    if data.get('license'):
+        query['license'] = data['license']
+    if data.get('hwid'):
+        query['hwid'] = data['hwid']
+    if not query:
+        return jsonify({'error': 'missing identifier'}), 400
+    user = users.find_one(query)
+    if not user:
+        return jsonify({'username': None}), 404
+    return jsonify({'username': user.get('username')})
 
 
 @app.post('/api/unlink_hwid')
@@ -714,6 +817,23 @@ def me():
     if not user:
         return jsonify({'error': 'not found'}), 404
     return jsonify({'username': user['username'], 'hwid': user.get('hwid'), 'banned': user.get('banned', False)})
+
+
+@app.get('/api/my_license')
+@auth_required
+def my_license():
+    """Return license details for the authenticated user."""
+    user = users.find_one({'_id': ObjectId(request.user_id)})
+    if not user:
+        return jsonify({'error': 'not found'}), 404
+    exp = user.get('expires')
+    expired = bool(exp and exp < datetime.datetime.utcnow())
+    return jsonify({
+        'license': user.get('license'),
+        'expires': exp,
+        'expired': expired,
+        'banned': user.get('banned', False),
+    })
 
 
 
@@ -831,7 +951,7 @@ def get_violations():
 
 
 @app.post('/api/security/kill_switch')
-@auth_required
+@admin_required
 def kill_switch_api():
     data = request.get_json() or {}
     hwid = data.get('hwid')
@@ -844,7 +964,7 @@ def kill_switch_api():
 
 
 @app.post('/api/security/flag_hwid')
-@auth_required
+@admin_required
 def flag_hwid():
     data = request.get_json() or {}
     hwid = data.get('hwid')
@@ -887,14 +1007,14 @@ def submit_feedback():
 
 
 @app.post('/api/control/restart')
-@admin_login_required
+@admin_required
 def control_restart():
     threading.Thread(target=os.execl, args=(sys.executable, sys.executable, *sys.argv)).start()
     return jsonify({'status': 'restarting'})
 
 
 @app.post('/api/control/shutdown')
-@admin_login_required
+@admin_required
 def control_shutdown():
     threading.Thread(target=os._exit, args=(0,)).start()
     return jsonify({'status': 'shutting down'})
@@ -906,6 +1026,13 @@ def not_found(e):
 def internal_error(e):
     return jsonify({'error': 'internal server error'}), 500
 
-
 if __name__ == '__main__':
+    if DISCORD_BOT_TOKEN:
+        from bot import bot
+
+        threading.Thread(
+            target=bot.run,
+            args=(DISCORD_BOT_TOKEN,),
+            daemon=True,
+        ).start()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
